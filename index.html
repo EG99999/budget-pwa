@@ -16,10 +16,11 @@
   --text:#f0ece4; --text2:#8a8580; --accent:#c8a97e; --accent2:#e8c99e;
   --red:#e05a5a; --green:#5aaa7a; --orange:#e09a5a;
   --radius:14px; --font:'Georgia',serif; --mono:'Courier New',monospace;
+  --nav-h:72px;
 }
 html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font); -webkit-font-smoothing:antialiased; overflow:hidden; }
 
-/* AUTH */
+/* ── AUTH ─────────────────────────────────────────────────── */
 #authScreen { height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:32px; padding:40px 24px; }
 .auth-logo { font-size:13px; letter-spacing:.3em; text-transform:uppercase; color:var(--text2); }
 .auth-title { font-size:42px; font-weight:normal; color:var(--text); line-height:1.1; text-align:center; }
@@ -29,7 +30,7 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .btn-login:active { transform:scale(.97); opacity:.9; }
 .btn-login:disabled { opacity:.5; cursor:not-allowed; }
 
-/* SETUP */
+/* ── SETUP ────────────────────────────────────────────────── */
 #setupScreen { height:100dvh; display:flex; flex-direction:column; padding:48px 24px 32px; gap:20px; overflow-y:auto; }
 .setup-step { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
 .setup-step h3 { font-size:11px; letter-spacing:.25em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; }
@@ -40,30 +41,122 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .btn-primary:active { opacity:.85; }
 .btn-primary:disabled { opacity:.4; cursor:not-allowed; }
 
-/* APP SHELL */
+/* ── APP SHELL ────────────────────────────────────────────── */
 #app { height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
-.app-header { padding:16px 20px 12px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); flex-shrink:0; }
+
+/* Header */
+.app-header { padding:14px 20px 12px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); flex-shrink:0; min-height:52px; }
 .header-title { font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--accent); }
-.header-month { font-size:13px; color:var(--text2); font-family:var(--mono); }
-.page { flex:1; overflow-y:auto; padding:20px 16px 100px; display:none; -webkit-overflow-scrolling:touch; }
+.header-center { font-size:12px; color:var(--text2); font-family:var(--mono); letter-spacing:.08em; flex:1; text-align:center; }
+.header-menu { background:none; border:none; color:var(--text2); cursor:pointer; padding:6px 4px; display:flex; flex-direction:column; gap:5px; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; }
+.header-menu span { display:block; width:22px; height:2px; background:currentColor; border-radius:2px; transition:all .25s; }
+.header-menu:active { color:var(--accent); }
+
+/* Pages */
+.page { flex:1; overflow-y:auto; padding:20px 16px calc(var(--nav-h) + 24px); display:none; -webkit-overflow-scrolling:touch; }
 .page.active { display:block; }
 
-/* BOTTOM NAV */
-.bottom-nav { flex-shrink:0; display:flex; overflow-x:auto; scrollbar-width:none; border-top:1px solid var(--border); background:var(--surface); padding-bottom:env(safe-area-inset-bottom); align-items:flex-end; }
-.bottom-nav::-webkit-scrollbar { display:none; }
-.nav-btn { flex:0 0 auto; min-width:58px; display:flex; flex-direction:column; align-items:center; gap:4px; padding:12px 8px; background:none; border:none; color:var(--text2); font-family:var(--mono); font-size:9px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; transition:color .2s; position:relative; }
-.nav-btn.active { color:var(--accent); }
-.nav-btn .nav-icon { font-size:18px; line-height:1; }
-.nav-btn.active::after { content:''; position:absolute; top:0; left:20%; right:20%; height:2px; background:var(--accent); border-radius:0 0 2px 2px; }
-/* FAB Aggiungi */
-.nav-add { min-width:68px; padding:0 8px 12px; color:var(--accent); }
-.nav-add-circle { width:48px; height:48px; border-radius:50%; background:var(--accent); color:var(--bg); display:flex; align-items:center; justify-content:center; font-size:28px; line-height:1; margin-bottom:4px; margin-top:-20px; box-shadow:0 4px 18px rgba(200,169,126,.5); transition:transform .15s, box-shadow .15s; }
-.nav-add:active .nav-add-circle { transform:scale(.9); box-shadow:0 2px 8px rgba(200,169,126,.3); }
-.nav-add.active .nav-add-circle { background:var(--accent2); }
-.nav-add::after { display:none !important; }
-.nav-add-label { font-family:var(--mono); font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); }
+/* ── BOTTOM NAV (3 pulsanti fissi) ───────────────────────── */
+.bottom-nav {
+  position:relative; flex-shrink:0; height:var(--nav-h);
+  display:grid; grid-template-columns:1fr 72px 1fr;
+  border-top:1px solid var(--border); background:var(--surface);
+  padding-bottom:env(safe-area-inset-bottom);
+  align-items:stretch;
+}
 
-/* CARDS */
+/* Pulsanti laterali (Cruscotto e Budget) */
+.nav-side {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:5px; background:none; border:none; cursor:pointer;
+  color:var(--text2); font-family:var(--mono); font-size:11px;
+  letter-spacing:.06em; text-transform:uppercase;
+  transition:color .2s; -webkit-tap-highlight-color:transparent;
+  padding:0 8px;
+}
+.nav-side .ns-icon { font-size:22px; line-height:1; }
+.nav-side .ns-label { font-size:10px; letter-spacing:.1em; }
+.nav-side.active { color:var(--accent); }
+.nav-side.active::after {
+  content:''; position:absolute; top:0; height:2px; background:var(--accent);
+  border-radius:0 0 3px 3px; left:0; right:0;
+}
+#navCruscotto.active::after { left:0; right:calc(50% + 36px); }
+#navBudget.active::after    { left:calc(50% + 36px); right:0; }
+
+/* FAB centrale */
+.nav-fab {
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+  padding-bottom:10px; background:none; border:none; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; position:relative;
+}
+.nav-fab-circle {
+  width:56px; height:56px; border-radius:50%; background:var(--accent);
+  color:var(--bg); display:flex; align-items:center; justify-content:center;
+  font-size:32px; line-height:1; font-weight:300;
+  position:absolute; bottom:10px;
+  box-shadow:0 4px 20px rgba(200,169,126,.55), 0 0 0 0 rgba(200,169,126,.2);
+  transition:transform .15s, box-shadow .15s;
+}
+.nav-fab:active .nav-fab-circle { transform:scale(.91); box-shadow:0 2px 8px rgba(200,169,126,.3); }
+.nav-fab.active .nav-fab-circle { background:var(--accent2); }
+.nav-fab-label {
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--accent); position:absolute; bottom:10px;
+  transform:translateY(46px);
+}
+
+/* ── DRAWER OVERLAY ───────────────────────────────────────── */
+#drawerOverlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.65);
+  opacity:0; pointer-events:none;
+  transition:opacity .3s; z-index:200;
+  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+}
+#drawerOverlay.show { opacity:1; pointer-events:all; }
+
+/* ── DRAWER ───────────────────────────────────────────────── */
+#drawer {
+  position:fixed; top:0; right:0; bottom:0; width:min(300px, 82vw);
+  background:var(--surface); border-left:1px solid var(--border);
+  transform:translateX(100%);
+  transition:transform .32s cubic-bezier(.4,0,.2,1);
+  z-index:201; display:flex; flex-direction:column;
+  padding-top:max(env(safe-area-inset-top), 16px);
+}
+#drawer.open { transform:translateX(0); }
+
+.drawer-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:4px 20px 20px;
+}
+.drawer-title { font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--accent); }
+.drawer-close {
+  background:none; border:none; color:var(--text2); cursor:pointer;
+  font-size:22px; padding:4px; line-height:1; -webkit-tap-highlight-color:transparent;
+}
+.drawer-close:active { color:var(--text); }
+
+.drawer-nav { flex:1; overflow-y:auto; padding:0 12px 20px; display:flex; flex-direction:column; gap:4px; }
+
+.drawer-item {
+  display:flex; align-items:center; gap:14px;
+  padding:14px 16px; border-radius:12px; border:none;
+  background:none; color:var(--text2); cursor:pointer; text-align:left;
+  transition:background .15s, color .15s; -webkit-tap-highlight-color:transparent;
+  width:100%;
+}
+.drawer-item:active { background:var(--surface2); }
+.drawer-item.active { background:rgba(200,169,126,.1); color:var(--accent); }
+.drawer-item .di-icon { font-size:20px; width:28px; text-align:center; flex-shrink:0; }
+.drawer-item .di-text { display:flex; flex-direction:column; gap:2px; }
+.drawer-item .di-name { font-size:15px; color:inherit; }
+.drawer-item .di-sub  { font-size:11px; color:var(--text2); font-family:var(--mono); letter-spacing:.04em; }
+.drawer-item.active .di-sub { color:rgba(200,169,126,.6); }
+
+.drawer-divider { height:1px; background:var(--border); margin:8px 16px; }
+
+/* ── CARDS ────────────────────────────────────────────────── */
 .summary-cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px; }
 .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
 .card.full { grid-column:1/-1; }
@@ -73,10 +166,10 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .card-value.negative { color:var(--red); }
 .card-sub { font-size:11px; color:var(--text2); margin-top:4px; font-family:var(--mono); }
 
-/* SECTION TITLE */
+/* ── SECTION TITLE ────────────────────────────────────────── */
 .section-title { font-size:10px; letter-spacing:.25em; text-transform:uppercase; color:var(--text2); font-family:var(--mono); margin-bottom:12px; margin-top:24px; }
 
-/* CATEGORY BARS */
+/* ── CATEGORY BARS ────────────────────────────────────────── */
 .category-list { display:flex; flex-direction:column; gap:10px; }
 .cat-item { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
 .cat-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px; }
@@ -84,79 +177,78 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .cat-amount { font-family:var(--mono); font-size:12px; color:var(--accent); }
 .cat-amount.positive { color:var(--green); }
 .cat-amount.negative { color:var(--red); }
-.cat-amount.warning { color:var(--orange); }
 .bar-track { height:3px; background:var(--surface2); border-radius:2px; overflow:hidden; }
 .bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:2px; transition:width .6s cubic-bezier(.4,0,.2,1); }
 .bar-fill.over { background:linear-gradient(90deg,var(--red),#f08080); }
 .bar-fill.green { background:linear-gradient(90deg,var(--green),#7acc9a); }
 .cat-count { font-family:var(--mono); font-size:10px; color:var(--text2); margin-top:4px; }
 
-/* DELTA */
+/* ── DELTA ────────────────────────────────────────────────── */
 .delta-badge { display:inline-block; font-family:var(--mono); font-size:11px; padding:2px 8px; border-radius:20px; margin-top:6px; }
 .delta-up   { background:rgba(224,90,90,.15); color:var(--red); }
 .delta-down { background:rgba(90,170,122,.15); color:var(--green); }
 .delta-eq   { background:rgba(138,133,128,.1); color:var(--text2); }
 
-/* FORM */
+/* ── FORM ─────────────────────────────────────────────────── */
 .form-section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
 .form-label { font-size:10px; font-family:var(--mono); letter-spacing:.2em; text-transform:uppercase; color:var(--text2); margin-bottom:8px; display:block; }
 .form-input,.form-select { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:13px 14px; color:var(--text); font-family:var(--font); font-size:15px; outline:none; appearance:none; -webkit-appearance:none; transition:border-color .2s; }
 .form-input:focus,.form-select:focus { border-color:var(--accent); }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .senso-toggle { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px; }
-.senso-btn { padding:12px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-family:var(--mono); font-size:12px; letter-spacing:.1em; cursor:pointer; text-transform:uppercase; transition:all .15s; text-align:center; }
-.senso-btn.active-uscita { background:rgba(224,90,90,.12); border-color:var(--red); color:var(--red); }
+.senso-btn { padding:14px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-family:var(--mono); font-size:13px; letter-spacing:.08em; cursor:pointer; text-transform:uppercase; transition:all .15s; text-align:center; }
+.senso-btn.active-uscita  { background:rgba(224,90,90,.12); border-color:var(--red);   color:var(--red); }
 .senso-btn.active-entrata { background:rgba(90,170,122,.12); border-color:var(--green); color:var(--green); }
-.valore-display { font-size:42px; text-align:center; padding:12px 0 4px; color:var(--text); font-weight:normal; letter-spacing:-1px; cursor:text; min-height:62px; outline:none; }
-.valore-display.uscita { color:var(--red); }
-.valore-display.entrata { color:var(--green); }
-.valore-display.placeholder { color:var(--text2); font-size:32px; }
-.btn-save { width:100%; background:var(--accent); color:var(--bg); border:none; border-radius:var(--radius); padding:16px; font-family:var(--mono); font-size:13px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; margin-top:4px; transition:all .2s; }
+.valore-display { font-size:46px; text-align:center; padding:14px 0 6px; color:var(--text); font-weight:normal; letter-spacing:-1px; cursor:text; min-height:68px; outline:none; }
+.valore-display.uscita   { color:var(--red); }
+.valore-display.entrata  { color:var(--green); }
+.valore-display.placeholder { color:var(--text2); font-size:36px; }
+.btn-save { width:100%; background:var(--accent); color:var(--bg); border:none; border-radius:var(--radius); padding:17px; font-family:var(--mono); font-size:14px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; margin-top:4px; transition:all .2s; }
 .btn-save:active { transform:scale(.98); opacity:.9; }
 .btn-save:disabled { opacity:.4; cursor:not-allowed; }
-.btn-cancel-edit { width:100%; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:var(--radius); padding:13px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; margin-top:8px; display:none; }
+.btn-cancel-edit { width:100%; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-family:var(--mono); font-size:13px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; margin-top:8px; display:none; }
 
-/* RECENTI */
+/* ── RECENTI ──────────────────────────────────────────────── */
 .recenti-header { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--text2); font-family:var(--mono); margin-bottom:8px; }
 .recenti-scroll { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px; margin-bottom:16px; }
 .recenti-scroll::-webkit-scrollbar { display:none; }
-.recente-item { flex:0 0 auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 12px; cursor:pointer; min-width:110px; max-width:150px; transition:border-color .15s; -webkit-tap-highlight-color:transparent; }
+.recente-item { flex:0 0 auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 13px; cursor:pointer; min-width:115px; max-width:155px; transition:border-color .15s; -webkit-tap-highlight-color:transparent; }
 .recente-item:active { border-color:var(--accent); background:var(--surface2); }
-.recente-cat { font-family:var(--mono); font-size:9px; color:var(--text2); letter-spacing:.08em; text-transform:uppercase; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.recente-val { font-family:var(--mono); font-size:14px; margin-bottom:2px; }
+.recente-cat  { font-family:var(--mono); font-size:9px; color:var(--text2); letter-spacing:.08em; text-transform:uppercase; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.recente-val  { font-family:var(--mono); font-size:15px; margin-bottom:2px; }
 .recente-val.neg { color:var(--red); }
 .recente-val.pos { color:var(--green); }
-.recente-desc { font-size:10px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.recente-desc { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-/* TRANSACTIONS */
+/* ── TRANSACTIONS ─────────────────────────────────────────── */
 .tx-list { display:flex; flex-direction:column; gap:8px; }
 .tx-item { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:13px 14px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:border-color .15s; }
 .tx-item.expanded { border-color:var(--accent); }
 .tx-row { display:flex; align-items:center; gap:12px; }
 .tx-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.tx-dot.uscita { background:var(--red); }
+.tx-dot.uscita  { background:var(--red); }
 .tx-dot.entrata { background:var(--green); }
 .tx-info { flex:1; min-width:0; }
-.tx-cat { font-size:11px; font-family:var(--mono); color:var(--text2); letter-spacing:.08em; text-transform:uppercase; }
-.tx-desc { font-size:13px; color:var(--text); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.tx-date { font-size:10px; font-family:var(--mono); color:var(--text2); margin-top:2px; }
+.tx-cat    { font-size:11px; font-family:var(--mono); color:var(--text2); letter-spacing:.08em; text-transform:uppercase; }
+.tx-desc   { font-size:13px; color:var(--text); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tx-date   { font-size:10px; font-family:var(--mono); color:var(--text2); margin-top:2px; }
 .tx-amount { font-family:var(--mono); font-size:14px; flex-shrink:0; }
-.tx-amount.uscita { color:var(--red); }
+.tx-amount.uscita  { color:var(--red); }
 .tx-amount.entrata { color:var(--green); }
 .tx-actions { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); gap:8px; }
 .tx-actions.show { display:flex; }
-.btn-tx { flex:1; padding:9px 6px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+.btn-tx { flex:1; padding:10px 6px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 .btn-tx.edit  { color:var(--accent); border-color:rgba(200,169,126,.4); }
 .btn-tx.dup   { color:var(--text2); }
 .btn-tx.del   { color:var(--red);   border-color:rgba(224,90,90,.4); }
 .btn-tx.del.confirm { background:rgba(224,90,90,.12); }
 
-/* MONTH SELECTOR */
+/* ── MONTH SELECTOR ───────────────────────────────────────── */
 .month-selector { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
-.month-arrow { background:var(--surface); border:1px solid var(--border); border-radius:8px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text); font-size:16px; flex-shrink:0; }
-.month-label { flex:1; text-align:center; font-family:var(--mono); font-size:13px; color:var(--text); letter-spacing:.1em; }
+.month-arrow { background:var(--surface); border:1px solid var(--border); border-radius:8px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text); font-size:18px; flex-shrink:0; }
+.month-label { flex:1; text-align:center; font-family:var(--mono); font-size:14px; color:var(--text); letter-spacing:.1em; }
 
-/* SERVIZI */
+/* ── SERVIZI ──────────────────────────────────────────────── */
 .servizio-item { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:8px; }
 .servizio-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
 .servizio-name { font-size:14px; color:var(--text); }
@@ -165,25 +257,25 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .servizio-cadenza { font-size:10px; color:var(--text2); font-family:var(--mono); }
 .badge-row { display:flex; gap:6px; flex-wrap:wrap; }
 .badge { font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:20px; letter-spacing:.05em; text-transform:uppercase; }
-.badge-attivo { background:rgba(90,170,122,.15); color:var(--green); border:1px solid rgba(90,170,122,.3); }
-.badge-necessario { background:rgba(138,133,128,.1); color:var(--text2); border:1px solid var(--border); }
-.badge-valutare { background:rgba(224,154,90,.15); color:var(--orange); border:1px solid rgba(224,154,90,.3); }
-.badge-eliminare { background:rgba(224,90,90,.15); color:var(--red); border:1px solid rgba(224,90,90,.3); }
+.badge-attivo     { background:rgba(90,170,122,.15); color:var(--green);  border:1px solid rgba(90,170,122,.3); }
+.badge-necessario { background:rgba(138,133,128,.1);  color:var(--text2);  border:1px solid var(--border); }
+.badge-valutare   { background:rgba(224,154,90,.15);  color:var(--orange); border:1px solid rgba(224,154,90,.3); }
+.badge-eliminare  { background:rgba(224,90,90,.15);   color:var(--red);    border:1px solid rgba(224,90,90,.3); }
 
-/* CASA */
+/* ── CASA ─────────────────────────────────────────────────── */
 .casa-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
 .casa-row:last-child { border-bottom:none; }
 .casa-row-name { font-size:13px; color:var(--text); }
 .casa-row-val { font-family:var(--mono); font-size:13px; color:var(--accent); }
 .casa-row-val.total { color:var(--text); font-size:15px; }
 
-/* TOAST */
-.toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface2); border:1px solid var(--border); border-radius:40px; padding:10px 20px; font-family:var(--mono); font-size:12px; color:var(--text); opacity:0; transition:all .3s; pointer-events:none; white-space:nowrap; z-index:999; }
+/* ── TOAST ────────────────────────────────────────────────── */
+.toast { position:fixed; bottom:calc(var(--nav-h) + 12px); left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface2); border:1px solid var(--border); border-radius:40px; padding:10px 22px; font-family:var(--mono); font-size:12px; color:var(--text); opacity:0; transition:all .3s; pointer-events:none; white-space:nowrap; z-index:999; }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 .toast.success { border-color:var(--green); color:var(--green); }
-.toast.error   { border-color:var(--red); color:var(--red); }
+.toast.error   { border-color:var(--red);   color:var(--red); }
 
-/* LOADING / EMPTY */
+/* ── LOADING / EMPTY ──────────────────────────────────────── */
 .loading { display:flex; align-items:center; justify-content:center; padding:40px; color:var(--text2); font-family:var(--mono); font-size:12px; letter-spacing:.2em; }
 .spinner { width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin-right:10px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -218,33 +310,36 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
 <!-- APP -->
 <div id="app" style="display:none">
+
+  <!-- HEADER -->
   <div class="app-header">
     <div class="header-title">Budget</div>
-    <div class="header-month" id="headerMonth"></div>
+    <div class="header-center" id="headerCenter"></div>
+    <button class="header-menu" onclick="openDrawer()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
   </div>
 
-  <!-- CRUSCOTTO (default) -->
+  <!-- PAGES -->
   <div class="page active" id="pageCruscotto">
     <div id="cruscottoContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- BUDGET -->
   <div class="page" id="pageBudget">
     <div id="budgetContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- INSERIMENTO -->
   <div class="page" id="pageAdd">
-    <div id="editBanner" style="display:none;background:rgba(200,169,126,.1);border:1px solid rgba(200,169,126,.3);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.05em">
-      MODIFICA VOCE ESISTENTE
+    <div id="editBanner" style="display:none;background:rgba(200,169,126,.1);border:1px solid rgba(200,169,126,.3);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase">
+      Modifica voce esistente
     </div>
     <div id="recentiSection">
       <div class="recenti-header">Richiama voce recente</div>
       <div class="recenti-scroll" id="recentiList"><div style="color:var(--text2);font-size:12px;font-family:var(--mono)">Caricamento…</div></div>
     </div>
     <div class="senso-toggle">
-      <button class="senso-btn active-uscita" id="btnUscita" onclick="setSenso('USCITA')">Uscita</button>
-      <button class="senso-btn" id="btnEntrata" onclick="setSenso('ENTRATA')">Entrata</button>
+      <button class="senso-btn active-uscita" id="btnUscita"  onclick="setSenso('USCITA')">Uscita</button>
+      <button class="senso-btn"              id="btnEntrata" onclick="setSenso('ENTRATA')">Entrata</button>
     </div>
     <div class="form-section">
       <span class="form-label">Importo</span>
@@ -316,7 +411,6 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     <button class="btn-cancel-edit" id="btnCancelEdit" onclick="annullaEdit()">Annulla modifica</button>
   </div>
 
-  <!-- LISTA -->
   <div class="page" id="pageLista">
     <div class="month-selector">
       <button class="month-arrow" onclick="cambiaListaMese(-1)">&#8249;</button>
@@ -326,57 +420,97 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     <div id="listaContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- DASHBOARD -->
   <div class="page" id="pageDash">
     <div id="dashContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- ANNUALE -->
   <div class="page" id="pageAnnuale">
     <div id="annualeContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- CFO -->
   <div class="page" id="pageCfo">
     <div id="cfoContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- CASA -->
   <div class="page" id="pageCasa">
     <div id="casaContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
-  <!-- SERVIZI -->
   <div class="page" id="pageServizi">
     <div id="serviziContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
-    <button class="nav-btn active" id="navCruscotto" onclick="showPage('cruscotto')"><span class="nav-icon">&#128188;</span>Cruscotto</button>
-    <button class="nav-btn"        id="navBudget"    onclick="showPage('budget')">   <span class="nav-icon">&#127919;</span>Budget</button>
-    <button class="nav-btn nav-add" id="navAdd"      onclick="showPage('add')">
-      <div class="nav-add-circle">+</div>
-      <span class="nav-add-label">Aggiungi</span>
+    <button class="nav-side active" id="navCruscotto" onclick="showPage('cruscotto')">
+      <span class="ns-icon">&#128188;</span>
+      <span class="ns-label">Cruscotto</span>
     </button>
-    <button class="nav-btn"        id="navLista"     onclick="showPage('lista')">    <span class="nav-icon">&#8801;</span>Lista</button>
-    <button class="nav-btn"        id="navDash"      onclick="showPage('dash')">     <span class="nav-icon">&#9672;</span>Dash</button>
-    <button class="nav-btn"        id="navAnnuale"   onclick="showPage('annuale')">  <span class="nav-icon">&#128197;</span>Annuale</button>
-    <button class="nav-btn"        id="navCfo"       onclick="showPage('cfo')">      <span class="nav-icon">&#128200;</span>CFO</button>
-    <button class="nav-btn"        id="navCasa"      onclick="showPage('casa')">     <span class="nav-icon">&#127968;</span>Casa</button>
-    <button class="nav-btn"        id="navServizi"   onclick="showPage('servizi')">  <span class="nav-icon">&#128260;</span>Servizi</button>
+    <button class="nav-fab" id="navAdd" onclick="showPage('add')">
+      <div class="nav-fab-circle">+</div>
+      <span class="nav-fab-label">Aggiungi</span>
+    </button>
+    <button class="nav-side" id="navBudget" onclick="showPage('budget')">
+      <span class="ns-icon">&#127919;</span>
+      <span class="ns-label">Budget</span>
+    </button>
+  </nav>
+
+</div><!-- /app -->
+
+<!-- DRAWER OVERLAY -->
+<div id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<!-- DRAWER -->
+<div id="drawer">
+  <div class="drawer-header">
+    <span class="drawer-title">Menu</span>
+    <button class="drawer-close" onclick="closeDrawer()">&#10005;</button>
+  </div>
+  <nav class="drawer-nav">
+    <button class="drawer-item" data-page="lista"    onclick="drawerNav('lista')">
+      <span class="di-icon">&#8801;</span>
+      <span class="di-text"><span class="di-name">Lista transazioni</span><span class="di-sub">Storico e filtri mensili</span></span>
+    </button>
+    <button class="drawer-item" data-page="dash"     onclick="drawerNav('dash')">
+      <span class="di-icon">&#9672;</span>
+      <span class="di-text"><span class="di-name">Dashboard</span><span class="di-sub">Riepilogo mensile</span></span>
+    </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-item" data-page="annuale"  onclick="drawerNav('annuale')">
+      <span class="di-icon">&#128197;</span>
+      <span class="di-text"><span class="di-name">Budget annuale</span><span class="di-sub">Obiettivi vs reale per anno</span></span>
+    </button>
+    <button class="drawer-item" data-page="cfo"      onclick="drawerNav('cfo')">
+      <span class="di-icon">&#128200;</span>
+      <span class="di-text"><span class="di-name">Analisi CFO</span><span class="di-sub">Indicatori finanziari</span></span>
+    </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-item" data-page="casa"     onclick="drawerNav('casa')">
+      <span class="di-icon">&#127968;</span>
+      <span class="di-text"><span class="di-name">Spese Casa</span><span class="di-sub">Affitto, utenze, manutenzione</span></span>
+    </button>
+    <button class="drawer-item" data-page="servizi"  onclick="drawerNav('servizi')">
+      <span class="di-icon">&#128260;</span>
+      <span class="di-text"><span class="di-name">Servizi ricorrenti</span><span class="di-sub">Abbonamenti e canoni</span></span>
+    </button>
   </nav>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-const CLIENT_ID = '1bb6501e-437c-472e-b1cf-a1b2fc95c978';
-const SCOPES    = ['Files.ReadWrite', 'User.Read'];
+const CLIENT_ID     = '1bb6501e-437c-472e-b1cf-a1b2fc95c978';
+const SCOPES        = ['Files.ReadWrite', 'User.Read'];
 const DEFAULT_PATH  = '006-COSTI E SPESE/000 - COSTI ANNUALI/COSTI ANNUALI 2026.xlsm';
 const DEFAULT_TABLE = 'TblTransazioni';
 const MESI_IT = ['GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO',
                  'LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
+const PAGE_LABELS = {
+  cruscotto:'Cruscotto', budget:'Budget', add:'Nuova voce',
+  lista:'Lista', dash:'Dashboard', annuale:'Budget annuale',
+  cfo:'Analisi CFO', casa:'Casa', servizi:'Servizi'
+};
 
 const msalConfig = {
   auth: {
@@ -390,7 +524,8 @@ const msalInstance = new msal.PublicClientApplication(msalConfig);
 
 let accessToken  = null;
 let currentSenso = 'USCITA';
-let editingIndex = null; // null = nuova voce, number = modifica riga esistente
+let editingIndex = null;
+let currentPage  = 'cruscotto';
 let dashMese     = { y: new Date().getFullYear(), m: new Date().getMonth() };
 let listaMese    = { y: new Date().getFullYear(), m: new Date().getMonth() };
 let budgetMese   = { y: new Date().getFullYear(), m: new Date().getMonth() };
@@ -398,26 +533,13 @@ let budgetMese   = { y: new Date().getFullYear(), m: new Date().getMonth() };
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
   const btnLogin = document.getElementById('btnLogin');
-  try {
-    await msalInstance.initialize();
-  } catch(e) {
-    if (btnLogin) { btnLogin.disabled = false; btnLogin.textContent = 'Errore: ' + e.message; }
-    return;
-  }
+  try { await msalInstance.initialize(); }
+  catch(e) { if (btnLogin) { btnLogin.disabled=false; btnLogin.textContent='Errore: '+e.message; } return; }
   if (btnLogin) btnLogin.disabled = false;
-
   try {
     const resp = await msalInstance.handleRedirectPromise();
-    if (resp && resp.accessToken) {
-      accessToken = resp.accessToken;
-      msalInstance.setActiveAccount(resp.account);
-      checkSetup();
-      return;
-    }
-  } catch(e) {
-    showAuthError('Errore autenticazione: ' + e.message);
-  }
-
+    if (resp && resp.accessToken) { accessToken=resp.accessToken; msalInstance.setActiveAccount(resp.account); checkSetup(); return; }
+  } catch(e) { showAuthError('Errore autenticazione: '+e.message); }
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
@@ -427,33 +549,20 @@ window.addEventListener('load', async () => {
 
 async function login() {
   const btn = document.getElementById('btnLogin');
-  btn.disabled = true; btn.textContent = 'Connessione…';
-  try {
-    await msalInstance.loginRedirect({ scopes: SCOPES });
-  } catch(e) {
-    showAuthError('Errore login: ' + e.message);
-    btn.disabled = false; btn.textContent = 'Accedi con Microsoft';
-  }
+  btn.disabled=true; btn.textContent='Connessione…';
+  try { await msalInstance.loginRedirect({ scopes:SCOPES }); }
+  catch(e) { showAuthError('Errore login: '+e.message); btn.disabled=false; btn.textContent='Accedi con Microsoft'; }
 }
 
 function showAuthError(msg) {
   let el = document.getElementById('authError');
-  if (!el) {
-    el = document.createElement('p');
-    el.id = 'authError';
-    el.style.cssText = 'color:var(--red);font-size:13px;text-align:center;max-width:280px;line-height:1.5';
-    document.getElementById('authScreen').appendChild(el);
-  }
+  if (!el) { el=document.createElement('p'); el.id='authError'; el.style.cssText='color:var(--red);font-size:13px;text-align:center;max-width:280px;line-height:1.5'; document.getElementById('authScreen').appendChild(el); }
   el.textContent = msg;
 }
 
 async function getToken() {
-  try {
-    const res = await msalInstance.acquireTokenSilent({ scopes: SCOPES });
-    accessToken = res.accessToken;
-  } catch(e) {
-    await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
-  }
+  try { const r=await msalInstance.acquireTokenSilent({scopes:SCOPES}); accessToken=r.accessToken; }
+  catch(e) { await msalInstance.acquireTokenRedirect({scopes:SCOPES}); }
 }
 
 // ── SETUP ────────────────────────────────────────────────────
@@ -461,11 +570,9 @@ async function checkSetup() {
   const cfg = getConfig();
   if (cfg) { startApp(); return; }
   try {
-    const res = await apiGet('/me/drive/root:/' + encodeURIComponent(DEFAULT_PATH));
+    const res = await apiGet('/me/drive/root:/'+encodeURIComponent(DEFAULT_PATH));
     if (res.id) {
-      localStorage.setItem('budgetConfig', JSON.stringify({
-        filePath: DEFAULT_PATH, tableName: DEFAULT_TABLE, fileId: res.id
-      }));
+      localStorage.setItem('budgetConfig', JSON.stringify({filePath:DEFAULT_PATH, tableName:DEFAULT_TABLE, fileId:res.id}));
       startApp(); return;
     }
   } catch(e) {}
@@ -481,17 +588,15 @@ function getConfig() {
 async function saveConfig() {
   const filePath  = document.getElementById('filePathInput').value.trim();
   const tableName = document.getElementById('tableNameInput').value.trim() || DEFAULT_TABLE;
-  if (!filePath) { showToast('Inserisci il percorso del file', 'error'); return; }
+  if (!filePath) { showToast('Inserisci il percorso del file','error'); return; }
   showToast('Verifica file…');
   try {
-    const res = await apiGet('/me/drive/root:/' + encodeURIComponent(filePath));
+    const res = await apiGet('/me/drive/root:/'+encodeURIComponent(filePath));
     if (!res.id) throw new Error('File non trovato');
-    localStorage.setItem('budgetConfig', JSON.stringify({ filePath, tableName, fileId: res.id }));
-    showToast('Configurazione salvata', 'success');
+    localStorage.setItem('budgetConfig', JSON.stringify({filePath, tableName, fileId:res.id}));
+    showToast('Configurazione salvata','success');
     setTimeout(startApp, 800);
-  } catch(e) {
-    showToast('File non trovato: controlla il percorso', 'error');
-  }
+  } catch(e) { showToast('File non trovato: controlla il percorso','error'); }
 }
 
 function startApp() {
@@ -499,187 +604,169 @@ function startApp() {
   document.getElementById('setupScreen').style.display = 'none';
   document.getElementById('app').style.display         = 'flex';
   document.getElementById('fData').value = new Date().toISOString().split('T')[0];
-  updateHeaderMonth();
-  loadCruscotto(); // prima tab
+  updateHeaderCenter('cruscotto');
+  loadCruscotto();
 }
 
-function updateHeaderMonth() {
+function updateHeaderCenter(page) {
   const now = new Date();
-  document.getElementById('headerMonth').textContent =
-    MESI_IT[now.getMonth()].slice(0,3) + ' ' + now.getFullYear();
+  const monthStr = MESI_IT[now.getMonth()].slice(0,3) + ' ' + now.getFullYear();
+  const isMain = page === 'cruscotto' || page === 'budget' || page === 'add';
+  document.getElementById('headerCenter').textContent = isMain ? monthStr : PAGE_LABELS[page] || '';
 }
 
 // ── NAVIGAZIONE ─────────────────────────────────────────────
-const ALL_PAGES = ['cruscotto','budget','add','lista','dash','annuale','cfo','casa','servizi'];
+const ALL_PAGES    = ['cruscotto','budget','add','lista','dash','annuale','cfo','casa','servizi'];
+const BOTTOM_PAGES = ['cruscotto','add','budget'];
 
 function showPage(page) {
+  currentPage = page;
   ALL_PAGES.forEach(p => {
-    document.getElementById('page' + cap(p)).classList.toggle('active', p === page);
-    document.getElementById('nav'  + cap(p)).classList.toggle('active', p === page);
+    document.getElementById('page'+cap(p)).classList.toggle('active', p===page);
   });
-  if (page === 'dash')      loadDashboard();
-  if (page === 'lista')     renderLista();
-  if (page === 'budget')    loadBudget();
-  if (page === 'annuale')   loadAnnuale();
-  if (page === 'cruscotto') loadCruscotto();
-  if (page === 'cfo')       loadCfo();
-  if (page === 'casa')      loadCasa();
-  if (page === 'servizi')   loadServizi();
-  if (page === 'add')       loadRecenti();
+  BOTTOM_PAGES.forEach(p => {
+    document.getElementById('nav'+cap(p)).classList.toggle('active', p===page);
+  });
+  document.querySelectorAll('.drawer-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page===page);
+  });
+  updateHeaderCenter(page);
+  if (page==='dash')      loadDashboard();
+  if (page==='lista')     renderLista();
+  if (page==='budget')    loadBudget();
+  if (page==='annuale')   loadAnnuale();
+  if (page==='cruscotto') loadCruscotto();
+  if (page==='cfo')       loadCfo();
+  if (page==='casa')      loadCasa();
+  if (page==='servizi')   loadServizi();
+  if (page==='add')       loadRecenti();
 }
 
-function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function cap(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
 
-// ── GRAPH API ────────────────────────────────────────────────
+// ── DRAWER ────────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+function drawerNav(page) { closeDrawer(); showPage(page); }
+
+// ── GRAPH API ─────────────────────────────────────────────────
 async function apiGet(path) {
   await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    headers: { Authorization: 'Bearer ' + accessToken }
-  });
+  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {headers:{Authorization:'Bearer '+accessToken}});
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
 async function apiPost(path, body) {
   await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {method:'POST', headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'}, body:JSON.stringify(body)});
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
 async function apiPatch(path, body) {
   await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    method: 'PATCH',
-    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {method:'PATCH', headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'}, body:JSON.stringify(body)});
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
 async function apiDelete(path) {
   await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
-    method: 'DELETE',
-    headers: { Authorization: 'Bearer ' + accessToken }
-  });
+  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {method:'DELETE', headers:{Authorization:'Bearer '+accessToken}});
   if (!res.ok) throw new Error(await res.text());
 }
-
 async function readRange(sheetName, address) {
-  const cfg = getConfig();
-  await getToken();
+  const cfg = getConfig(); await getToken();
   const s = encodeURIComponent(sheetName);
-  const res = await fetch(
-    `https://graph.microsoft.com/v1.0/me/drive/items/${cfg.fileId}/workbook/worksheets('${s}')/range(address='${address}')`,
-    { headers: { Authorization: 'Bearer ' + accessToken } }
-  );
+  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${cfg.fileId}/workbook/worksheets('${s}')/range(address='${address}')`, {headers:{Authorization:'Bearer '+accessToken}});
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-// ── TRANSAZIONI ──────────────────────────────────────────────
+// ── TRANSAZIONI ───────────────────────────────────────────────
 let cachedRows = null, cacheTime = 0;
 
 async function getTransazioni() {
   const now = Date.now();
-  if (cachedRows && now - cacheTime < 60000) return cachedRows;
+  if (cachedRows && now-cacheTime < 60000) return cachedRows;
   const cfg = getConfig();
   const data = await apiGet(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`);
-  cachedRows = (data.value || []).map(r => ({
-    _index: r.index,
-    senso: r.values[0][0], tipologia: r.values[0][1],
-    valore: parseFloat(r.values[0][2]) || 0, cadenza: r.values[0][3],
-    descrizione: r.values[0][4], metodo: r.values[0][5],
-    mezzo: r.values[0][6], data: parseDate(r.values[0][7]), mese: r.values[0][8]
-  })).filter(r => r.valore !== 0);
+  cachedRows = (data.value||[]).map(r=>({
+    _index:r.index, senso:r.values[0][0], tipologia:r.values[0][1],
+    valore:parseFloat(r.values[0][2])||0, cadenza:r.values[0][3],
+    descrizione:r.values[0][4], metodo:r.values[0][5],
+    mezzo:r.values[0][6], data:parseDate(r.values[0][7]), mese:r.values[0][8]
+  })).filter(r=>r.valore!==0);
   cacheTime = now;
   return cachedRows;
 }
+function invalidateCache() { cachedRows=null; cacheTime=0; }
 
-function invalidateCache() { cachedRows = null; cacheTime = 0; }
-
-// ── RECENTI (per form aggiungi) ──────────────────────────────
+// ── RECENTI ───────────────────────────────────────────────────
 async function loadRecenti() {
   const container = document.getElementById('recentiList');
   if (!container) return;
   try {
     const rows = await getTransazioni();
-    const recent = [...rows]
-      .sort((a,b) => String(b.data).localeCompare(String(a.data)))
-      .slice(0, 12);
-    if (recent.length === 0) {
-      document.getElementById('recentiSection').style.display = 'none';
-      return;
-    }
+    const recent = [...rows].sort((a,b)=>String(b.data).localeCompare(String(a.data))).slice(0,12);
+    if (recent.length===0) { document.getElementById('recentiSection').style.display='none'; return; }
     document.getElementById('recentiSection').style.display = 'block';
-    container.innerHTML = recent.map(r => `
+    container.innerHTML = recent.map(r=>`
       <div class="recente-item" onclick='richiamaVoce(${JSON.stringify(r)})'>
         <div class="recente-cat">${r.tipologia||'—'}</div>
         <div class="recente-val ${r.valore<0?'neg':'pos'}">${fmt(Math.abs(r.valore))}</div>
         <div class="recente-desc">${r.descrizione||r.cadenza||'—'}</div>
       </div>`).join('');
-  } catch(e) {
-    document.getElementById('recentiSection').style.display = 'none';
-  }
+  } catch(e) { document.getElementById('recentiSection').style.display='none'; }
 }
 
 function richiamaVoce(r) {
-  // Pre-compila il form come NUOVA transazione (duplica) — non modifica l'originale
   editingIndex = null;
-  document.getElementById('editBanner').style.display = 'none';
-  document.getElementById('btnSave').textContent = 'Salva transazione';
+  document.getElementById('editBanner').style.display    = 'none';
+  document.getElementById('btnSave').textContent         = 'Salva transazione';
   document.getElementById('btnCancelEdit').style.display = 'none';
-
-  const senso = (r.senso || (r.valore < 0 ? 'USCITA' : 'ENTRATA')).toUpperCase();
+  const senso = (r.senso||(r.valore<0?'USCITA':'ENTRATA')).toUpperCase();
   setSenso(senso);
   document.getElementById('valoreHidden').value = Math.abs(r.valore);
   updateValoreDisplay();
-  if (r.tipologia) document.getElementById('fTipologia').value = r.tipologia;
-  if (r.cadenza)   document.getElementById('fCadenza').value   = r.cadenza;
-  if (r.metodo)    document.getElementById('fMetodo').value    = r.metodo;
-  if (r.mezzo)     document.getElementById('fMezzo').value     = r.mezzo;
-  if (r.descrizione) document.getElementById('fDesc').value    = r.descrizione;
-  // Data = oggi
+  if (r.tipologia)   document.getElementById('fTipologia').value = r.tipologia;
+  if (r.cadenza)     document.getElementById('fCadenza').value   = r.cadenza;
+  if (r.metodo)      document.getElementById('fMetodo').value    = r.metodo;
+  if (r.mezzo)       document.getElementById('fMezzo').value     = r.mezzo;
+  if (r.descrizione) document.getElementById('fDesc').value      = r.descrizione;
   document.getElementById('fData').value = new Date().toISOString().split('T')[0];
-  // Scroll in cima
-  document.getElementById('pageAdd').scrollTo(0, 0);
+  document.getElementById('pageAdd').scrollTo(0,0);
 }
 
-// ── DASHBOARD ────────────────────────────────────────────────
+// ── DASHBOARD ─────────────────────────────────────────────────
 async function loadDashboard() {
-  document.getElementById('dashContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  document.getElementById('dashContent').innerHTML = '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     const rows = await getTransazioni();
-    const { y, m } = dashMese;
-    const pm = m === 0 ? 11 : m - 1, py = m === 0 ? y - 1 : y;
-    const thisMonth = rows.filter(r => sameYM(r.data, y, m));
-    const prevMonth = rows.filter(r => { const d = new Date(r.data); return d.getFullYear()===py && d.getMonth()===pm; });
+    const {y,m} = dashMese;
+    const pm=m===0?11:m-1, py=m===0?y-1:y;
+    const thisMonth = rows.filter(r=>sameYM(r.data,y,m));
+    const prevMonth = rows.filter(r=>{const d=new Date(r.data);return d.getFullYear()===py&&d.getMonth()===pm;});
     const totUscite  = thisMonth.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
     const totEntrate = thisMonth.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
-    const saldo      = totUscite + totEntrate;
+    const saldo      = totUscite+totEntrate;
     const prevUscite = prevMonth.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
-    const delta      = prevUscite !== 0 ? ((totUscite - prevUscite) / Math.abs(prevUscite)) * 100 : 0;
-    const byCat = {};
-    thisMonth.filter(r=>r.valore<0).forEach(r => {
-      const cat = r.tipologia || 'ALTRO';
-      if (!byCat[cat]) byCat[cat] = { tot:0, count:0 };
-      byCat[cat].tot += Math.abs(r.valore); byCat[cat].count++;
-    });
-    const catArr = Object.entries(byCat).sort((a,b)=>b[1].tot-a[1].tot);
-    const maxVal = catArr.length > 0 ? catArr[0][1].tot : 1;
-    const absDelta = Math.abs(delta);
-    let deltaBadge = '';
-    if (absDelta < 1) deltaBadge = `<span class="delta-badge delta-eq">= vs ${MESI_IT[pm].slice(0,3)}</span>`;
-    else if (delta > 0) deltaBadge = `<span class="delta-badge delta-up">+${absDelta.toFixed(0)}% vs ${MESI_IT[pm].slice(0,3)}</span>`;
-    else deltaBadge = `<span class="delta-badge delta-down">-${absDelta.toFixed(0)}% vs ${MESI_IT[pm].slice(0,3)}</span>`;
-    document.getElementById('dashContent').innerHTML = `
+    const delta      = prevUscite!==0?((totUscite-prevUscite)/Math.abs(prevUscite))*100:0;
+    const byCat={};
+    thisMonth.filter(r=>r.valore<0).forEach(r=>{const c=r.tipologia||'ALTRO';if(!byCat[c])byCat[c]={tot:0,count:0};byCat[c].tot+=Math.abs(r.valore);byCat[c].count++;});
+    const catArr=Object.entries(byCat).sort((a,b)=>b[1].tot-a[1].tot);
+    const maxVal=catArr.length>0?catArr[0][1].tot:1;
+    const abd=Math.abs(delta);
+    const deltaBadge = abd<1?`<span class="delta-badge delta-eq">= vs ${MESI_IT[pm].slice(0,3)}</span>`:
+      delta>0?`<span class="delta-badge delta-up">+${abd.toFixed(0)}% vs ${MESI_IT[pm].slice(0,3)}</span>`:
+      `<span class="delta-badge delta-down">-${abd.toFixed(0)}% vs ${MESI_IT[pm].slice(0,3)}</span>`;
+    document.getElementById('dashContent').innerHTML=`
       <div class="month-selector" style="margin-bottom:16px">
         <button class="month-arrow" onclick="cambiadashmese(-1)">&#8249;</button>
         <div class="month-label">${MESI_IT[m]} ${y}</div>
@@ -692,45 +779,28 @@ async function loadDashboard() {
       </div>
       <div class="section-title">Spese per categoria</div>
       <div class="category-list">
-        ${catArr.length===0
-          ? '<div class="empty">Nessuna spesa questo mese</div>'
-          : catArr.map(([cat,d])=>`
-            <div class="cat-item">
-              <div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount">${fmt(d.tot)}</span></div>
-              <div class="bar-track"><div class="bar-fill" style="width:${(d.tot/maxVal*100).toFixed(1)}%"></div></div>
-              <div class="cat-count">${d.count} transazion${d.count===1?'e':'i'}</div>
-            </div>`).join('')}
+        ${catArr.length===0?'<div class="empty">Nessuna spesa questo mese</div>':
+          catArr.map(([cat,d])=>`<div class="cat-item">
+            <div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount">${fmt(d.tot)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(d.tot/maxVal*100).toFixed(1)}%"></div></div>
+            <div class="cat-count">${d.count} transazion${d.count===1?'e':'i'}</div>
+          </div>`).join('')}
       </div>`;
-  } catch(e) {
-    document.getElementById('dashContent').innerHTML = `<div class="empty">Errore caricamento dati.<br><small>${e.message}</small></div>`;
-  }
+  } catch(e) { document.getElementById('dashContent').innerHTML=`<div class="empty">Errore caricamento dati.<br><small>${e.message}</small></div>`; }
 }
+function cambiadashmese(dir){dashMese.m+=dir;if(dashMese.m>11){dashMese.m=0;dashMese.y++;}if(dashMese.m<0){dashMese.m=11;dashMese.y--;}loadDashboard();}
 
-function cambiadashmese(dir) {
-  dashMese.m += dir;
-  if (dashMese.m > 11) { dashMese.m=0; dashMese.y++; }
-  if (dashMese.m < 0)  { dashMese.m=11; dashMese.y--; }
-  loadDashboard();
-}
-
-// ── LISTA ────────────────────────────────────────────────────
+// ── LISTA ─────────────────────────────────────────────────────
 async function renderLista() {
-  document.getElementById('listaMeseLabel').textContent =
-    MESI_IT[listaMese.m].slice(0,3) + ' ' + listaMese.y;
-  document.getElementById('listaContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  document.getElementById('listaMeseLabel').textContent = MESI_IT[listaMese.m].slice(0,3)+' '+listaMese.y;
+  document.getElementById('listaContent').innerHTML = '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     const rows = await getTransazioni();
-    const { y, m } = listaMese;
-    const filtered = rows
-      .filter(r => sameYM(r.data, y, m))
-      .sort((a,b) => String(b.data).localeCompare(String(a.data)));
-    if (filtered.length === 0) {
-      document.getElementById('listaContent').innerHTML = '<div class="empty">Nessuna transazione<br>per questo mese</div>';
-      return;
-    }
-    document.getElementById('listaContent').innerHTML = `<div class="tx-list">
-      ${filtered.map(r => `
+    const {y,m} = listaMese;
+    const filtered = rows.filter(r=>sameYM(r.data,y,m)).sort((a,b)=>String(b.data).localeCompare(String(a.data)));
+    if (filtered.length===0) { document.getElementById('listaContent').innerHTML='<div class="empty">Nessuna transazione<br>per questo mese</div>'; return; }
+    document.getElementById('listaContent').innerHTML=`<div class="tx-list">
+      ${filtered.map(r=>`
         <div class="tx-item" onclick="toggleTxActions(this)">
           <div class="tx-row">
             <div class="tx-dot ${r.valore<0?'uscita':'entrata'}"></div>
@@ -744,67 +814,44 @@ async function renderLista() {
           <div class="tx-actions">
             <button class="btn-tx edit" onclick="event.stopPropagation();preparaEdit(${JSON.stringify(r)})">&#9998; Modifica</button>
             <button class="btn-tx dup"  onclick="event.stopPropagation();duplicaVoce(${JSON.stringify(r)})">&#10010; Duplica</button>
-            <button class="btn-tx del"  onclick="event.stopPropagation();eliminaTransazione(this, ${r._index})">&#128465; Elimina</button>
+            <button class="btn-tx del"  onclick="event.stopPropagation();eliminaTransazione(this,${r._index})">&#128465; Elimina</button>
           </div>
         </div>`).join('')}
     </div>`;
-  } catch(e) {
-    document.getElementById('listaContent').innerHTML = `<div class="empty">Errore: ${e.message}</div>`;
-  }
+  } catch(e) { document.getElementById('listaContent').innerHTML=`<div class="empty">Errore: ${e.message}</div>`; }
 }
 
 function toggleTxActions(el) {
-  const actions = el.querySelector('.tx-actions');
-  const isOpen = actions.classList.contains('show');
-  // chiudi tutti gli altri
-  document.querySelectorAll('.tx-actions.show').forEach(a => {
-    a.classList.remove('show');
-    a.closest('.tx-item').classList.remove('expanded');
-  });
-  if (!isOpen) {
-    actions.classList.add('show');
-    el.classList.add('expanded');
-  }
+  const actions=el.querySelector('.tx-actions');
+  const isOpen=actions.classList.contains('show');
+  document.querySelectorAll('.tx-actions.show').forEach(a=>{a.classList.remove('show');a.closest('.tx-item').classList.remove('expanded');});
+  if (!isOpen){actions.classList.add('show');el.classList.add('expanded');}
 }
+function cambiaListaMese(dir){listaMese.m+=dir;if(listaMese.m>11){listaMese.m=0;listaMese.y++;}if(listaMese.m<0){listaMese.m=11;listaMese.y--;}renderLista();}
 
-function cambiaListaMese(dir) {
-  listaMese.m += dir;
-  if (listaMese.m > 11) { listaMese.m=0; listaMese.y++; }
-  if (listaMese.m < 0)  { listaMese.m=11; listaMese.y--; }
-  renderLista();
-}
-
-// ── ELIMINA ──────────────────────────────────────────────────
+// ── ELIMINA ───────────────────────────────────────────────────
 async function eliminaTransazione(btn, rowIndex) {
-  // doppio tap per conferma
   if (!btn.classList.contains('confirm')) {
-    btn.classList.add('confirm');
-    btn.textContent = 'Conferma?';
-    setTimeout(() => { btn.classList.remove('confirm'); btn.innerHTML = '&#128465; Elimina'; }, 3000);
+    btn.classList.add('confirm'); btn.textContent='Conferma?';
+    setTimeout(()=>{btn.classList.remove('confirm');btn.innerHTML='&#128465; Elimina';},3000);
     return;
   }
-  btn.disabled = true; btn.textContent = '…';
+  btn.disabled=true; btn.textContent='…';
   try {
-    const cfg = getConfig();
+    const cfg=getConfig();
     await apiDelete(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows/itemAt(index=${rowIndex})`);
-    invalidateCache();
-    showToast('Voce eliminata', 'success');
-    renderLista();
-  } catch(e) {
-    showToast('Errore: ' + e.message, 'error');
-    btn.disabled = false; btn.innerHTML = '&#128465; Elimina';
-  }
+    invalidateCache(); showToast('Voce eliminata','success'); renderLista();
+  } catch(e) { showToast('Errore: '+e.message,'error'); btn.disabled=false; btn.innerHTML='&#128465; Elimina'; }
 }
 
-// ── MODIFICA ─────────────────────────────────────────────────
+// ── MODIFICA ──────────────────────────────────────────────────
 function preparaEdit(r) {
   editingIndex = r._index;
-  document.getElementById('editBanner').style.display = 'block';
-  document.getElementById('btnSave').textContent = 'Aggiorna voce';
+  document.getElementById('editBanner').style.display    = 'block';
+  document.getElementById('btnSave').textContent         = 'Aggiorna voce';
   document.getElementById('btnCancelEdit').style.display = 'block';
-  document.getElementById('recentiSection').style.display = 'none';
-
-  const senso = (r.senso || (r.valore < 0 ? 'USCITA' : 'ENTRATA')).toUpperCase();
+  document.getElementById('recentiSection').style.display= 'none';
+  const senso=(r.senso||(r.valore<0?'USCITA':'ENTRATA')).toUpperCase();
   setSenso(senso);
   document.getElementById('valoreHidden').value = Math.abs(r.valore);
   updateValoreDisplay();
@@ -812,247 +859,158 @@ function preparaEdit(r) {
   if (r.cadenza)     document.getElementById('fCadenza').value   = r.cadenza;
   if (r.metodo)      document.getElementById('fMetodo').value    = r.metodo;
   if (r.mezzo)       document.getElementById('fMezzo').value     = r.mezzo;
-  document.getElementById('fDesc').value  = r.descrizione || '';
-  document.getElementById('fData').value  = r.data || new Date().toISOString().split('T')[0];
-
-  showPage('add');
-  document.getElementById('pageAdd').scrollTo(0, 0);
+  document.getElementById('fDesc').value = r.descrizione||'';
+  document.getElementById('fData').value = r.data||new Date().toISOString().split('T')[0];
+  showPage('add'); document.getElementById('pageAdd').scrollTo(0,0);
 }
-
-function duplicaVoce(r) {
-  // Come richiamaVoce ma apre direttamente il form senza modificare l'originale
-  richiamaVoce(r);
-  showPage('add');
-}
-
+function duplicaVoce(r) { richiamaVoce(r); showPage('add'); }
 function annullaEdit() {
-  editingIndex = null;
-  document.getElementById('editBanner').style.display = 'none';
-  document.getElementById('btnSave').textContent = 'Salva transazione';
+  editingIndex=null;
+  document.getElementById('editBanner').style.display    = 'none';
+  document.getElementById('btnSave').textContent         = 'Salva transazione';
   document.getElementById('btnCancelEdit').style.display = 'none';
-  document.getElementById('recentiSection').style.display = 'block';
+  document.getElementById('recentiSection').style.display= 'block';
   resetForm();
 }
 
-// ── INSERIMENTO / AGGIORNAMENTO ──────────────────────────────
+// ── INSERIMENTO / AGGIORNAMENTO ───────────────────────────────
 function setSenso(senso) {
-  currentSenso = senso;
-  document.getElementById('btnUscita').className  = 'senso-btn' + (senso==='USCITA'?' active-uscita':'');
-  document.getElementById('btnEntrata').className = 'senso-btn' + (senso==='ENTRATA'?' active-entrata':'');
+  currentSenso=senso;
+  document.getElementById('btnUscita').className  = 'senso-btn'+(senso==='USCITA'?' active-uscita':'');
+  document.getElementById('btnEntrata').className = 'senso-btn'+(senso==='ENTRATA'?' active-entrata':'');
   updateValoreDisplay();
 }
-
-function focusValore() { document.getElementById('valoreHidden').focus(); }
-
-function updateValoreDisplay() {
-  const inp = document.getElementById('valoreHidden');
-  const el  = document.getElementById('valoreDisplay');
-  const v   = parseFloat(inp.value);
-  if (!inp.value || isNaN(v) || v===0) {
-    el.textContent = '0,00'; el.className = 'valore-display placeholder';
-  } else {
-    el.textContent = fmt(Math.abs(v));
-    el.className   = 'valore-display ' + currentSenso.toLowerCase();
-  }
+function focusValore(){document.getElementById('valoreHidden').focus();}
+function updateValoreDisplay(){
+  const inp=document.getElementById('valoreHidden'), el=document.getElementById('valoreDisplay');
+  const v=parseFloat(inp.value);
+  if (!inp.value||isNaN(v)||v===0){el.textContent='0,00';el.className='valore-display placeholder';}
+  else{el.textContent=fmt(Math.abs(v));el.className='valore-display '+currentSenso.toLowerCase();}
 }
-
-function resetForm() {
-  document.getElementById('valoreHidden').value = '';
-  document.getElementById('fDesc').value = '';
-  document.getElementById('fTipologia').value = '';
-  document.getElementById('fCadenza').value = 'SECCA';
-  document.getElementById('fData').value = new Date().toISOString().split('T')[0];
-  setSenso('USCITA');
-  updateValoreDisplay();
+function resetForm(){
+  document.getElementById('valoreHidden').value='';
+  document.getElementById('fDesc').value='';
+  document.getElementById('fTipologia').value='';
+  document.getElementById('fCadenza').value='SECCA';
+  document.getElementById('fData').value=new Date().toISOString().split('T')[0];
+  setSenso('USCITA'); updateValoreDisplay();
 }
 
 async function salvaTransazione() {
-  const vRaw = parseFloat(document.getElementById('valoreHidden').value);
-  const tip  = document.getElementById('fTipologia').value;
-  const data = document.getElementById('fData').value;
-  if (!vRaw || isNaN(vRaw)) { showToast('Inserisci un importo', 'error'); return; }
-  if (!tip)  { showToast('Seleziona una categoria', 'error'); return; }
-  if (!data) { showToast('Inserisci una data', 'error'); return; }
-
-  const v    = currentSenso === 'USCITA' ? -Math.abs(vRaw) : Math.abs(vRaw);
-  const dObj = new Date(data);
-  const rowValues = [
-    currentSenso, tip, v,
-    document.getElementById('fCadenza').value,
-    document.getElementById('fDesc').value,
-    document.getElementById('fMetodo').value,
-    document.getElementById('fMezzo').value,
-    data, MESI_IT[dObj.getMonth()]
-  ];
-
-  const btn = document.getElementById('btnSave');
-  btn.disabled = true; btn.textContent = editingIndex !== null ? 'Aggiornamento…' : 'Salvataggio…';
+  const vRaw=parseFloat(document.getElementById('valoreHidden').value);
+  const tip=document.getElementById('fTipologia').value;
+  const data=document.getElementById('fData').value;
+  if (!vRaw||isNaN(vRaw)){showToast('Inserisci un importo','error');return;}
+  if (!tip){showToast('Seleziona una categoria','error');return;}
+  if (!data){showToast('Inserisci una data','error');return;}
+  const v=currentSenso==='USCITA'?-Math.abs(vRaw):Math.abs(vRaw);
+  const dObj=new Date(data);
+  const rowValues=[currentSenso,tip,v,document.getElementById('fCadenza').value,document.getElementById('fDesc').value,document.getElementById('fMetodo').value,document.getElementById('fMezzo').value,data,MESI_IT[dObj.getMonth()]];
+  const btn=document.getElementById('btnSave');
+  btn.disabled=true; btn.textContent=editingIndex!==null?'Aggiornamento…':'Salvataggio…';
   try {
-    const cfg = getConfig();
-    if (editingIndex !== null) {
-      await apiPatch(
-        `/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows/itemAt(index=${editingIndex})`,
-        { values: [rowValues] }
-      );
-      showToast('Voce aggiornata', 'success');
+    const cfg=getConfig();
+    if (editingIndex!==null) {
+      await apiPatch(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows/itemAt(index=${editingIndex})`,{values:[rowValues]});
+      showToast('Voce aggiornata','success');
     } else {
-      await apiPost(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`, { values: [rowValues] });
-      showToast('Transazione salvata', 'success');
+      await apiPost(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`,{values:[rowValues]});
+      showToast('Transazione salvata','success');
     }
     invalidateCache();
-    editingIndex = null;
-    document.getElementById('editBanner').style.display = 'none';
+    editingIndex=null;
+    document.getElementById('editBanner').style.display    = 'none';
     document.getElementById('btnCancelEdit').style.display = 'none';
-    document.getElementById('recentiSection').style.display = 'block';
+    document.getElementById('recentiSection').style.display= 'block';
     resetForm();
-  } catch(e) {
-    showToast('Errore: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = editingIndex !== null ? 'Aggiorna voce' : 'Salva transazione';
-  }
+  } catch(e){ showToast('Errore: '+e.message,'error'); }
+  finally { btn.disabled=false; btn.textContent=editingIndex!==null?'Aggiorna voce':'Salva transazione'; }
 }
 
-// ── BUDGET ───────────────────────────────────────────────────
-let budgetCache = null;
-
+// ── BUDGET ────────────────────────────────────────────────────
+let budgetCache=null;
 async function loadBudget() {
-  document.getElementById('budgetContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  document.getElementById('budgetContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
-    if (!budgetCache) {
-      const data = await readRange('BUDGET MASTER', 'B4:R32');
-      budgetCache = data.values;
+    if (!budgetCache){const data=await readRange('BUDGET MASTER','B4:R32');budgetCache=data.values;}
+    const txns=await getTransazioni();
+    const {y,m}=budgetMese;
+    const actuals={};
+    txns.filter(r=>{const d=new Date(r.data);return d.getFullYear()===y&&d.getMonth()===m;})
+        .forEach(r=>{const c=r.tipologia||'ALTRO';actuals[c]=(actuals[c]||0)+r.valore;});
+    const mIdx=m+1;
+    let html=`<div class="month-selector" style="margin-bottom:16px">
+      <button class="month-arrow" onclick="cambiaBudgetMese(-1)">&#8249;</button>
+      <div class="month-label">${MESI_IT[m]} ${y}</div>
+      <button class="month-arrow" onclick="cambiaBudgetMese(1)">&#8250;</button>
+    </div>`;
+    let isEntrata=false;
+    for (let i=1;i<budgetCache.length;i++){
+      const row=budgetCache[i]; const cat=String(row[0]||'').trim(); if(!cat)continue;
+      if(cat.includes('──')){const l=cat.replace(/──/g,'').trim();isEntrata=l.includes('ENTRATE');html+=`<div class="section-title">${l}</div>`;continue;}
+      if(cat.startsWith('TOT')||cat==='SALDO'){const b=parseFloat(row[mIdx])||0;html+=`<div class="cat-item"><div class="cat-header"><span class="cat-name" style="color:var(--accent)">${cat}</span><span class="cat-amount">${b>=0?'+':''}${fmt(b)}</span></div></div>`;continue;}
+      if(cat==='SAVING RATE %')continue;
+      const budget=parseFloat(row[mIdx])||0,actual=actuals[cat]||0;
+      if(budget===0&&actual===0)continue;
+      const bAbs=Math.abs(budget),aAbs=Math.abs(actual);
+      const pct=bAbs>0?Math.min(130,(aAbs/bAbs)*100):(aAbs>0?100:0);
+      const isOk=isEntrata?(actual>=budget):(aAbs<=bAbs);
+      html+=`<div class="cat-item"><div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount ${isOk?(isEntrata?'positive':''):'negative'}">${fmt(aAbs)} / ${fmt(bAbs)}</span></div><div class="bar-track"><div class="bar-fill ${isOk?(isEntrata?'green':''):'over'}" style="width:${pct.toFixed(1)}%"></div></div><div class="cat-count">${isOk?(isEntrata?'Obiettivo raggiunto':'Nei limiti'):'Superato'}</div></div>`;
     }
-    const txns = await getTransazioni();
-    const { y, m } = budgetMese;
-    const actuals = {};
-    txns.filter(r => { const d=new Date(r.data); return d.getFullYear()===y && d.getMonth()===m; })
-        .forEach(r => { const cat=r.tipologia||'ALTRO'; actuals[cat]=(actuals[cat]||0)+r.valore; });
-    const mIdx = m + 1;
-    let html = `
-      <div class="month-selector" style="margin-bottom:16px">
-        <button class="month-arrow" onclick="cambiaBudgetMese(-1)">&#8249;</button>
-        <div class="month-label">${MESI_IT[m]} ${y}</div>
-        <button class="month-arrow" onclick="cambiaBudgetMese(1)">&#8250;</button>
-      </div>`;
-    let isEntrata = false;
-    for (let i = 1; i < budgetCache.length; i++) {
-      const row = budgetCache[i];
-      const cat = String(row[0] || '').trim();
-      if (!cat) continue;
-      if (cat.includes('──')) {
-        const label = cat.replace(/──/g,'').trim();
-        isEntrata = label.includes('ENTRATE');
-        html += `<div class="section-title">${label}</div>`;
-        continue;
-      }
-      if (cat.startsWith('TOT') || cat === 'SALDO') {
-        const budget = parseFloat(row[mIdx]) || 0;
-        html += `<div class="cat-item"><div class="cat-header">
-          <span class="cat-name" style="color:var(--accent)">${cat}</span>
-          <span class="cat-amount">${budget>=0?'+':''}${fmt(budget)}</span>
-        </div></div>`;
-        continue;
-      }
-      if (cat === 'SAVING RATE %') continue;
-      const budget = parseFloat(row[mIdx]) || 0;
-      const actual = actuals[cat] || 0;
-      if (budget === 0 && actual === 0) continue;
-      const budgetAbs = Math.abs(budget), actualAbs = Math.abs(actual);
-      const pct    = budgetAbs > 0 ? Math.min(130, (actualAbs / budgetAbs) * 100) : (actualAbs > 0 ? 100 : 0);
-      const isOk   = isEntrata ? (actual >= budget) : (actualAbs <= budgetAbs);
-      html += `<div class="cat-item">
-        <div class="cat-header">
-          <span class="cat-name">${cat}</span>
-          <span class="cat-amount ${isOk?(isEntrata?'positive':''):'negative'}">${fmt(actualAbs)} / ${fmt(budgetAbs)}</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill ${isOk?(isEntrata?'green':''):'over'}" style="width:${pct.toFixed(1)}%"></div></div>
-        <div class="cat-count">${isOk?(isEntrata?'Obiettivo raggiunto':'Nei limiti'):'Superato'}</div>
-      </div>`;
-    }
-    document.getElementById('budgetContent').innerHTML = html;
-  } catch(e) {
-    document.getElementById('budgetContent').innerHTML =
-      `<div class="empty">Errore caricamento budget.<br><small>${e.message}</small></div>`;
-  }
+    document.getElementById('budgetContent').innerHTML=html;
+  } catch(e){document.getElementById('budgetContent').innerHTML=`<div class="empty">Errore caricamento budget.<br><small>${e.message}</small></div>`;}
 }
+function cambiaBudgetMese(dir){budgetMese.m+=dir;if(budgetMese.m>11){budgetMese.m=0;budgetMese.y++;}if(budgetMese.m<0){budgetMese.m=11;budgetMese.y--;}budgetCache=null;loadBudget();}
 
-function cambiaBudgetMese(dir) {
-  budgetMese.m += dir;
-  if (budgetMese.m > 11) { budgetMese.m=0; budgetMese.y++; }
-  if (budgetMese.m < 0)  { budgetMese.m=11; budgetMese.y--; }
-  budgetCache = null; loadBudget();
-}
-
-// ── CASA ─────────────────────────────────────────────────────
-let casaCache = null;
-
-async function loadCasa() {
-  document.getElementById('casaContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
-  try {
-    if (!casaCache) {
-      const data = await readRange('PANNELLO CASA', 'A29:O36');
-      casaCache = data.values;
-    }
-    const now = new Date();
-    const mIdx = now.getMonth() + 1;
-    let html = '<div class="summary-cards">';
-    let totaleRow = null;
-    casaCache.slice(2).forEach(row => {
-      const name = String(row[0]||'').replace('🏠 ','').trim();
-      if (!name) return;
-      const ytd = parseFloat(row[13]) || 0, avg = parseFloat(row[14]) || 0;
-      if (name.toUpperCase().includes('TOTALE')) {
-        totaleRow = { name:'Totale casa YTD', ytd, avg };
-      } else {
-        html += `<div class="card"><div class="card-label">${name}</div><div class="card-value">${fmt(ytd)}</div><div class="card-sub">media ${fmt(avg)}/mese</div></div>`;
-      }
+// ── CASA ──────────────────────────────────────────────────────
+let casaCache=null;
+async function loadCasa(){
+  document.getElementById('casaContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try{
+    if(!casaCache){const data=await readRange('PANNELLO CASA','A29:O36');casaCache=data.values;}
+    const now=new Date(),mIdx=now.getMonth()+1;
+    let html='<div class="summary-cards">',totaleRow=null;
+    casaCache.slice(2).forEach(row=>{
+      const name=String(row[0]||'').replace('🏠 ','').trim();if(!name)return;
+      const ytd=parseFloat(row[13])||0,avg=parseFloat(row[14])||0;
+      if(name.toUpperCase().includes('TOTALE')){totaleRow={name:'Totale casa YTD',ytd,avg};}
+      else{html+=`<div class="card"><div class="card-label">${name}</div><div class="card-value">${fmt(ytd)}</div><div class="card-sub">media ${fmt(avg)}/mese</div></div>`;}
     });
-    if (totaleRow) {
-      html += `<div class="card full"><div class="card-label">${totaleRow.name}</div><div class="card-value negative">${fmt(totaleRow.ytd)}</div><div class="card-sub">media ${fmt(totaleRow.avg)}/mese</div></div>`;
-    }
-    html += '</div>';
-    html += `<div class="section-title">${MESI_IT[now.getMonth()]} ${now.getFullYear()}</div><div class="cat-item">`;
-    casaCache.slice(2).forEach(row => {
-      const name = String(row[0]||'').replace('🏠 ','').trim();
-      if (!name) return;
-      const val = parseFloat(row[mIdx]) || 0;
-      if (val === 0) return;
-      const isTotal = name.toUpperCase().includes('TOTALE');
-      html += `<div class="casa-row"><span class="casa-row-name" ${isTotal?'style="color:var(--accent)"':''}>${name}</span><span class="casa-row-val ${isTotal?'total':''}">${fmt(val)}</span></div>`;
+    if(totaleRow)html+=`<div class="card full"><div class="card-label">${totaleRow.name}</div><div class="card-value negative">${fmt(totaleRow.ytd)}</div><div class="card-sub">media ${fmt(totaleRow.avg)}/mese</div></div>`;
+    html+=`</div><div class="section-title">${MESI_IT[now.getMonth()]} ${now.getFullYear()}</div><div class="cat-item">`;
+    casaCache.slice(2).forEach(row=>{
+      const name=String(row[0]||'').replace('🏠 ','').trim();if(!name)return;
+      const val=parseFloat(row[mIdx])||0;if(val===0)return;
+      const isTotal=name.toUpperCase().includes('TOTALE');
+      html+=`<div class="casa-row"><span class="casa-row-name" ${isTotal?'style="color:var(--accent)"':''}>${name}</span><span class="casa-row-val ${isTotal?'total':''}">${fmt(val)}</span></div>`;
     });
-    html += '</div>';
-    document.getElementById('casaContent').innerHTML = html;
-  } catch(e) {
-    document.getElementById('casaContent').innerHTML = `<div class="empty">Errore caricamento Casa.<br><small>${e.message}</small></div>`;
-  }
+    html+='</div>';
+    document.getElementById('casaContent').innerHTML=html;
+  }catch(e){document.getElementById('casaContent').innerHTML=`<div class="empty">Errore caricamento Casa.<br><small>${e.message}</small></div>`;}
 }
 
 // ── CRUSCOTTO ────────────────────────────────────────────────
-async function loadCruscotto() {
-  document.getElementById('cruscottoContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
-  try {
-    const txns = await getTransazioni();
-    const y = new Date().getFullYear();
-    const ytd = txns.filter(r => String(r.data||'').startsWith(y));
-    const entrateYtd = ytd.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
-    const usciteYtd  = ytd.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
-    const saldoYtd   = entrateYtd + usciteYtd;
-    const savingRate = entrateYtd > 0 ? (saldoYtd/entrateYtd*100) : 0;
-    const months = Array.from({length:12},(_,m) => {
-      const mt = ytd.filter(r=>sameYM(r.data,y,m));
-      const u = mt.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
-      const e = mt.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
-      return {m, u, e, s:u+e, ok:mt.length>0};
+async function loadCruscotto(){
+  document.getElementById('cruscottoContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try{
+    const txns=await getTransazioni();
+    const y=new Date().getFullYear();
+    const ytd=txns.filter(r=>String(r.data||'').startsWith(y));
+    const entrateYtd=ytd.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
+    const usciteYtd =ytd.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
+    const saldoYtd  =entrateYtd+usciteYtd;
+    const savingRate=entrateYtd>0?(saldoYtd/entrateYtd*100):0;
+    const months=Array.from({length:12},(_,m)=>{
+      const mt=ytd.filter(r=>sameYM(r.data,y,m));
+      const u=mt.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
+      const e=mt.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
+      return{m,u,e,s:u+e,ok:mt.length>0};
     });
-    const byCat = {};
+    const byCat={};
     ytd.filter(r=>r.valore<0).forEach(r=>{const c=r.tipologia||'ALTRO';byCat[c]=(byCat[c]||0)+Math.abs(r.valore);});
-    const topCats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    const maxCat = topCats.length>0 ? topCats[0][1] : 1;
-    document.getElementById('cruscottoContent').innerHTML = `
+    const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const maxCat=topCats.length>0?topCats[0][1]:1;
+    document.getElementById('cruscottoContent').innerHTML=`
       <div class="summary-cards">
         <div class="card"><div class="card-label">Entrate YTD</div><div class="card-value positive">${fmt(entrateYtd)}</div></div>
         <div class="card"><div class="card-label">Uscite YTD</div><div class="card-value negative">${fmt(Math.abs(usciteYtd))}</div></div>
@@ -1063,245 +1021,131 @@ async function loadCruscotto() {
       <div class="section-title">Riepilogo mensile ${y}</div>
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
         <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;min-width:320px">
-          <tr style="color:var(--text2)">
-            <td style="padding:5px 6px 5px 0">MESE</td>
-            <td style="padding:5px 6px;text-align:right">USCITE</td>
-            <td style="padding:5px 6px;text-align:right">ENTRATE</td>
-            <td style="padding:5px 6px;text-align:right">SALDO</td>
-          </tr>
-          ${months.map(mo => mo.ok ? `
-            <tr style="border-top:1px solid var(--border)">
-              <td style="padding:5px 6px 5px 0;color:var(--text)">${MESI_IT[mo.m].slice(0,3)}</td>
-              <td style="padding:5px 6px;text-align:right;color:var(--red)">${fmt(Math.abs(mo.u))}</td>
-              <td style="padding:5px 6px;text-align:right;color:var(--green)">${fmt(mo.e)}</td>
-              <td style="padding:5px 6px;text-align:right;color:${mo.s>=0?'var(--green)':'var(--red)'}">${mo.s>=0?'+':''}${fmt(mo.s)}</td>
-            </tr>` : `
-            <tr style="border-top:1px solid var(--border);opacity:.3">
-              <td style="padding:5px 6px 5px 0">${MESI_IT[mo.m].slice(0,3)}</td>
-              <td colspan="3" style="padding:5px 6px;text-align:center;color:var(--text2)">—</td>
-            </tr>`).join('')}
+          <tr style="color:var(--text2)"><td style="padding:5px 6px 5px 0">MESE</td><td style="padding:5px 6px;text-align:right">USCITE</td><td style="padding:5px 6px;text-align:right">ENTRATE</td><td style="padding:5px 6px;text-align:right">SALDO</td></tr>
+          ${months.map(mo=>mo.ok?`<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px 5px 0;color:var(--text)">${MESI_IT[mo.m].slice(0,3)}</td><td style="padding:5px 6px;text-align:right;color:var(--red)">${fmt(Math.abs(mo.u))}</td><td style="padding:5px 6px;text-align:right;color:var(--green)">${fmt(mo.e)}</td><td style="padding:5px 6px;text-align:right;color:${mo.s>=0?'var(--green)':'var(--red)'}">${mo.s>=0?'+':''}${fmt(mo.s)}</td></tr>`:
+          `<tr style="border-top:1px solid var(--border);opacity:.3"><td style="padding:5px 6px 5px 0">${MESI_IT[mo.m].slice(0,3)}</td><td colspan="3" style="padding:5px 6px;text-align:center;color:var(--text2)">—</td></tr>`).join('')}
         </table>
       </div>
       <div class="section-title">Top spese per categoria</div>
       <div class="category-list">
-        ${topCats.map(([cat,tot])=>`
-          <div class="cat-item">
-            <div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount">${fmt(tot)}</span></div>
-            <div class="bar-track"><div class="bar-fill" style="width:${(tot/maxCat*100).toFixed(1)}%"></div></div>
-          </div>`).join('')}
+        ${topCats.map(([cat,tot])=>`<div class="cat-item"><div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount">${fmt(tot)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(tot/maxCat*100).toFixed(1)}%"></div></div></div>`).join('')}
       </div>`;
-  } catch(e) {
-    document.getElementById('cruscottoContent').innerHTML = `<div class="empty">Errore: ${e.message}</div>`;
-  }
+  }catch(e){document.getElementById('cruscottoContent').innerHTML=`<div class="empty">Errore: ${e.message}</div>`;}
 }
 
-// ── CFO ──────────────────────────────────────────────────────
-let cfoCache = null;
-
-async function loadCfo() {
-  document.getElementById('cfoContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
-  try {
-    if (!cfoCache) {
-      const data = await readRange('ANALISI CFO', 'B4:G51');
-      cfoCache = data.values;
-    }
-    const SKIP_LABELS = new Set(['INDICATORE','PARAMETRO','CATEGORIA','AREA','VOCE']);
-    let html = '';
-    cfoCache.forEach(row => {
-      const label = String(row[0]||'').trim();
-      if (!label) return;
-      if (label.startsWith('▌') || label.includes('PARAMETRI DI INPUT')) {
-        html += `<div class="section-title">${label.replace(/▌/g,'').replace(/^\d+\.\s*/,'').trim()}</div>`;
+// ── CFO ───────────────────────────────────────────────────────
+let cfoCache=null;
+async function loadCfo(){
+  document.getElementById('cfoContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try{
+    if(!cfoCache){const data=await readRange('ANALISI CFO','B4:G51');cfoCache=data.values;}
+    const SKIP=new Set(['INDICATORE','PARAMETRO','CATEGORIA','AREA','VOCE']);
+    let html='';
+    cfoCache.forEach(row=>{
+      const label=String(row[0]||'').trim();if(!label)return;
+      if(label.startsWith('▌')||label.includes('PARAMETRI DI INPUT')){html+=`<div class="section-title">${label.replace(/▌/g,'').replace(/^\d+\.\s*/,'').trim()}</div>`;return;}
+      if(SKIP.has(label))return;
+      if(label.includes('PUNTEGGIO FINANZIARIO')){
+        const score=parseFloat(row[3])||0,stato=String(row[4]||'').trim();
+        const sc=stato.includes('🟢')?'badge-attivo':stato.includes('🔴')?'badge-eliminare':'badge-valutare';
+        html+=`<div class="cat-item" style="border-color:var(--accent)"><div class="cat-header"><span class="cat-name" style="color:var(--accent)">${label}</span><span class="cat-amount">${score.toFixed(1)}/10</span></div>${stato?`<div class="badge-row"><span class="badge ${sc}">${stato.replace(/[🟢🔴🟡🏆]/g,'').trim()}</span></div>`:''}</div>`;
         return;
       }
-      if (SKIP_LABELS.has(label)) return;
-      if (label.includes('PUNTEGGIO FINANZIARIO')) {
-        const score = parseFloat(row[3]) || 0;
-        const stato = String(row[4]||'').trim();
-        const sc = stato.includes('🟢')?'badge-attivo':stato.includes('🔴')?'badge-eliminare':'badge-valutare';
-        html += `<div class="cat-item" style="border-color:var(--accent)">
-          <div class="cat-header">
-            <span class="cat-name" style="color:var(--accent)">${label}</span>
-            <span class="cat-amount">${score.toFixed(1)}/10</span>
-          </div>
-          ${stato?`<div class="badge-row"><span class="badge ${sc}">${stato.replace(/[🟢🔴🟡🏆]/g,'').trim()}</span></div>`:''}
-        </div>`;
-        return;
-      }
-      let valRaw = row[1];
-      let target = String(row[2]||'').trim(), status = String(row[3]||'').trim(), note = String(row[4]||'').trim();
-      if (!valRaw && row[2] !== undefined && typeof row[2] === 'number') {
-        valRaw = row[2]; target = ''; status = ''; note = String(row[3]||'').trim();
-      }
-      if (valRaw === null && !status) return;
-      let valStr = '—';
-      if (typeof valRaw === 'number') {
-        const isPercent = Math.abs(valRaw) <= 2 && (target.includes('%') || note.includes('%') || label.toLowerCase().includes('rate') || label.toLowerCase().includes('%'));
-        const isMesi = target.toLowerCase().includes('mes') || label.toLowerCase().includes('mesi') || label.toLowerCase().includes('runway');
-        if (isPercent) valStr = (valRaw*100).toFixed(1) + '%';
-        else if (isMesi) valStr = valRaw.toFixed(2) + ' mesi';
-        else if (Math.abs(valRaw) >= 10) valStr = fmt(valRaw);
-        else valStr = valRaw.toFixed(2);
-      } else if (valRaw) { valStr = String(valRaw); }
-      const sc = status.includes('🟢')?'badge-attivo':status.includes('🔴')?'badge-eliminare':status.includes('🟡')?'badge-valutare':'';
-      const statusLabel = status.replace(/[🟢🔴🟡□]/g,'').trim();
-      html += `<div class="cat-item">
-        <div class="cat-header">
-          <span class="cat-name" style="font-size:11px;line-height:1.4">${label}</span>
-          <span class="cat-amount ${sc==='badge-attivo'?'positive':sc==='badge-eliminare'?'negative':''}">${valStr}</span>
-        </div>
-        ${(target||statusLabel)?`<div class="badge-row" style="margin-top:5px">
-          ${target?`<span class="badge badge-necessario" style="font-size:9px">${target}</span>`:''}
-          ${statusLabel&&sc?`<span class="badge ${sc}" style="font-size:9px">${statusLabel}</span>`:''}
-        </div>`:''}
-        ${note?`<div class="cat-count" style="margin-top:4px">${note.length>65?note.slice(0,65)+'…':note}</div>`:''}
-      </div>`;
+      let valRaw=row[1],target=String(row[2]||'').trim(),status=String(row[3]||'').trim(),note=String(row[4]||'').trim();
+      if(!valRaw&&row[2]!==undefined&&typeof row[2]==='number'){valRaw=row[2];target='';status='';note=String(row[3]||'').trim();}
+      if(valRaw===null&&!status)return;
+      let valStr='—';
+      if(typeof valRaw==='number'){
+        const isPct=Math.abs(valRaw)<=2&&(target.includes('%')||note.includes('%')||label.toLowerCase().includes('rate')||label.toLowerCase().includes('%'));
+        const isMesi=target.toLowerCase().includes('mes')||label.toLowerCase().includes('mesi')||label.toLowerCase().includes('runway');
+        if(isPct)valStr=(valRaw*100).toFixed(1)+'%';
+        else if(isMesi)valStr=valRaw.toFixed(2)+' mesi';
+        else if(Math.abs(valRaw)>=10)valStr=fmt(valRaw);
+        else valStr=valRaw.toFixed(2);
+      }else if(valRaw)valStr=String(valRaw);
+      const sc=status.includes('🟢')?'badge-attivo':status.includes('🔴')?'badge-eliminare':status.includes('🟡')?'badge-valutare':'';
+      const sLabel=status.replace(/[🟢🔴🟡□]/g,'').trim();
+      html+=`<div class="cat-item"><div class="cat-header"><span class="cat-name" style="font-size:11px;line-height:1.4">${label}</span><span class="cat-amount ${sc==='badge-attivo'?'positive':sc==='badge-eliminare'?'negative':''}">${valStr}</span></div>${(target||sLabel)?`<div class="badge-row" style="margin-top:5px">${target?`<span class="badge badge-necessario" style="font-size:9px">${target}</span>`:''}${sLabel&&sc?`<span class="badge ${sc}" style="font-size:9px">${sLabel}</span>`:''}</div>`:''}${note?`<div class="cat-count" style="margin-top:4px">${note.length>65?note.slice(0,65)+'…':note}</div>`:''}</div>`;
     });
-    document.getElementById('cfoContent').innerHTML = html||'<div class="empty">Nessun dato CFO</div>';
-  } catch(e) {
-    document.getElementById('cfoContent').innerHTML = `<div class="empty">Errore caricamento CFO.<br><small>${e.message}</small></div>`;
-  }
+    document.getElementById('cfoContent').innerHTML=html||'<div class="empty">Nessun dato CFO</div>';
+  }catch(e){document.getElementById('cfoContent').innerHTML=`<div class="empty">Errore caricamento CFO.<br><small>${e.message}</small></div>`;}
 }
 
-// ── ANNUALE ──────────────────────────────────────────────────
-async function loadAnnuale() {
-  document.getElementById('annualeContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
-  try {
-    if (!budgetCache) {
-      const data = await readRange('BUDGET MASTER', 'B4:R32');
-      budgetCache = data.values;
+// ── ANNUALE ───────────────────────────────────────────────────
+async function loadAnnuale(){
+  document.getElementById('annualeContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try{
+    if(!budgetCache){const data=await readRange('BUDGET MASTER','B4:R32');budgetCache=data.values;}
+    const txns=await getTransazioni();
+    const y=new Date().getFullYear();
+    const actuals={};
+    txns.filter(r=>String(r.data||'').startsWith(y)).forEach(r=>{const c=r.tipologia||'ALTRO';actuals[c]=(actuals[c]||0)+r.valore;});
+    let totBU=0,totAU=0,totBE=0,totAE=0,html='',isEntrate=false;
+    for(let i=1;i<budgetCache.length;i++){
+      const row=budgetCache[i];const cat=String(row[0]||'').trim();if(!cat)continue;
+      if(cat.includes('──')){isEntrate=cat.includes('ENTRATE');html+=`<div class="section-title">${cat.replace(/──/g,'').trim()}</div>`;continue;}
+      if(cat.startsWith('TOT')||cat==='SALDO'||cat==='SAVING RATE %')continue;
+      const bAnnuo=parseFloat(row[13])||0,actual=actuals[cat]||0;
+      if(bAnnuo===0&&actual===0)continue;
+      const aAbs=Math.abs(actual),bAbs=Math.abs(bAnnuo);
+      const pct=bAbs>0?Math.min(130,aAbs/bAbs*100):(aAbs>0?100:0);
+      const isOk=isEntrate?actual>=bAnnuo:aAbs<=bAbs;
+      const rim=bAbs-aAbs;
+      if(isEntrate){totBE+=bAbs;totAE+=aAbs;}else{totBU+=bAbs;totAU+=aAbs;}
+      html+=`<div class="cat-item"><div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount ${isOk?'':'negative'}">${fmt(aAbs)} / ${fmt(bAbs)}</span></div><div class="bar-track"><div class="bar-fill ${isOk?'':'over'}" style="width:${pct.toFixed(1)}%"></div></div><div class="cat-count" style="display:flex;justify-content:space-between"><span>${pct.toFixed(0)}% usato</span><span style="color:${rim>=0?'var(--green)':'var(--red)'}">${rim>=0?'Avanzano':'Sforati di'} ${fmt(Math.abs(rim))}</span></div></div>`;
     }
-    const txns = await getTransazioni();
-    const y = new Date().getFullYear();
-    const actuals = {};
-    txns.filter(r => String(r.data||'').startsWith(y)).forEach(r => {
-      const cat = r.tipologia||'ALTRO';
-      actuals[cat] = (actuals[cat]||0) + r.valore;
-    });
-    let totBudgetUscite=0, totActualUscite=0, totBudgetEntrate=0, totActualEntrate=0;
-    let html = '', isEntrate = false;
-    for (let i=1; i<budgetCache.length; i++) {
-      const row = budgetCache[i];
-      const cat = String(row[0]||'').trim();
-      if (!cat) continue;
-      if (cat.includes('──')) {
-        isEntrate = cat.includes('ENTRATE');
-        html += `<div class="section-title">${cat.replace(/──/g,'').trim()}</div>`;
-        continue;
-      }
-      if (cat.startsWith('TOT')||cat==='SALDO'||cat==='SAVING RATE %') continue;
-      const budgetAnnuo = parseFloat(row[13]) || 0;
-      const actual = actuals[cat] || 0;
-      if (budgetAnnuo===0 && actual===0) continue;
-      const actualAbs = Math.abs(actual), budgetAbs = Math.abs(budgetAnnuo);
-      const pct = budgetAbs>0 ? Math.min(130, actualAbs/budgetAbs*100) : (actualAbs>0?100:0);
-      const isOk = isEntrate ? actual>=budgetAnnuo : actualAbs<=budgetAbs;
-      const rimanente = budgetAbs - actualAbs;
-      if (isEntrate) { totBudgetEntrate+=budgetAbs; totActualEntrate+=actualAbs; }
-      else { totBudgetUscite+=budgetAbs; totActualUscite+=actualAbs; }
-      html += `<div class="cat-item">
-        <div class="cat-header">
-          <span class="cat-name">${cat}</span>
-          <span class="cat-amount ${isOk?'':'negative'}">${fmt(actualAbs)} / ${fmt(budgetAbs)}</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill ${isOk?'':'over'}" style="width:${pct.toFixed(1)}%"></div></div>
-        <div class="cat-count" style="display:flex;justify-content:space-between">
-          <span>${pct.toFixed(0)}% usato</span>
-          <span style="color:${rimanente>=0?'var(--green)':'var(--red)'}">${rimanente>=0?'Avanzano':'Sforati di'} ${fmt(Math.abs(rimanente))}</span>
-        </div>
-      </div>`;
-    }
-    const summary = `<div class="summary-cards" style="margin-bottom:20px">
-      <div class="card"><div class="card-label">Budget uscite ${y}</div><div class="card-value">${fmt(totBudgetUscite)}</div></div>
-      <div class="card"><div class="card-label">Speso YTD</div><div class="card-value ${totActualUscite<=totBudgetUscite?'positive':'negative'}">${fmt(totActualUscite)}</div></div>
-      <div class="card full"><div class="card-label">Margine rimanente</div>
-        <div class="card-value ${(totBudgetUscite-totActualUscite)>=0?'positive':'negative'}">${fmt(totBudgetUscite-totActualUscite)}</div>
-        <div class="card-sub">${((totActualUscite/totBudgetUscite)*100).toFixed(0)}% del budget annuale usato</div>
-      </div>
-    </div>`;
-    document.getElementById('annualeContent').innerHTML = summary + html;
-  } catch(e) {
-    document.getElementById('annualeContent').innerHTML = `<div class="empty">Errore: ${e.message}</div>`;
-  }
+    const summary=`<div class="summary-cards" style="margin-bottom:20px"><div class="card"><div class="card-label">Budget uscite ${y}</div><div class="card-value">${fmt(totBU)}</div></div><div class="card"><div class="card-label">Speso YTD</div><div class="card-value ${totAU<=totBU?'positive':'negative'}">${fmt(totAU)}</div></div><div class="card full"><div class="card-label">Margine rimanente</div><div class="card-value ${(totBU-totAU)>=0?'positive':'negative'}">${fmt(totBU-totAU)}</div><div class="card-sub">${((totAU/totBU)*100).toFixed(0)}% del budget annuale usato</div></div></div>`;
+    document.getElementById('annualeContent').innerHTML=summary+html;
+  }catch(e){document.getElementById('annualeContent').innerHTML=`<div class="empty">Errore: ${e.message}</div>`;}
 }
 
-// ── SERVIZI ──────────────────────────────────────────────────
-let serviziCache = null;
-
-async function loadServizi() {
-  document.getElementById('serviziContent').innerHTML =
-    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
-  try {
-    if (!serviziCache) {
-      const data = await readRange('SPESE RICORRENTI', 'B4:I11');
-      serviziCache = data.values;
-    }
-    const services = serviziCache.slice(1).filter(r => r[0] && String(r[0]).trim() && !String(r[0]).includes('▌'));
-    let totMensile = 0, html = '';
-    services.forEach(row => {
-      const nome=String(row[0]||'').trim(), cadenza=String(row[1]||'').trim();
-      const importo=parseFloat(row[2])||0, categoria=String(row[3]||'').trim();
-      const fornitore=String(row[4]||'').trim(), stato=String(row[5]||'').trim().toUpperCase();
-      const valut=String(row[6]||'').trim().toUpperCase(), note=String(row[7]||'').trim();
-      if (!nome || !importo) return;
-      const statoClass = stato==='ATTIVO'?'badge-attivo':'badge-necessario';
-      let valutClass = valut==='VALUTARE'?'badge-valutare':valut==='ELIMINARE'?'badge-eliminare':'badge-necessario';
-      if (stato==='ATTIVO' && cadenza==='MENSILE') totMensile += importo;
-      html += `<div class="servizio-item">
-        <div class="servizio-header">
-          <div><div class="servizio-name">${nome}</div><div class="servizio-provider">${fornitore}${categoria?' · '+categoria:''}</div></div>
-          <div style="text-align:right"><div class="servizio-cost">${fmt(importo)}</div><div class="servizio-cadenza">${cadenza}</div></div>
-        </div>
-        <div class="badge-row">
-          <span class="badge ${statoClass}">${stato}</span>
-          ${valut?`<span class="badge ${valutClass}">${valut}</span>`:''}
-          ${note?`<span class="badge badge-necessario">${note}</span>`:''}
-        </div>
-      </div>`;
+// ── SERVIZI ───────────────────────────────────────────────────
+let serviziCache=null;
+async function loadServizi(){
+  document.getElementById('serviziContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try{
+    if(!serviziCache){const data=await readRange('SPESE RICORRENTI','B4:I11');serviziCache=data.values;}
+    const services=serviziCache.slice(1).filter(r=>r[0]&&String(r[0]).trim()&&!String(r[0]).includes('▌'));
+    let totMensile=0,html='';
+    services.forEach(row=>{
+      const nome=String(row[0]||'').trim(),cadenza=String(row[1]||'').trim();
+      const importo=parseFloat(row[2])||0,categoria=String(row[3]||'').trim();
+      const fornitore=String(row[4]||'').trim(),stato=String(row[5]||'').trim().toUpperCase();
+      const valut=String(row[6]||'').trim().toUpperCase(),note=String(row[7]||'').trim();
+      if(!nome||!importo)return;
+      const sc=stato==='ATTIVO'?'badge-attivo':'badge-necessario';
+      const vc=valut==='VALUTARE'?'badge-valutare':valut==='ELIMINARE'?'badge-eliminare':'badge-necessario';
+      if(stato==='ATTIVO'&&cadenza==='MENSILE')totMensile+=importo;
+      html+=`<div class="servizio-item"><div class="servizio-header"><div><div class="servizio-name">${nome}</div><div class="servizio-provider">${fornitore}${categoria?' · '+categoria:''}</div></div><div style="text-align:right"><div class="servizio-cost">${fmt(importo)}</div><div class="servizio-cadenza">${cadenza}</div></div></div><div class="badge-row"><span class="badge ${sc}">${stato}</span>${valut?`<span class="badge ${vc}">${valut}</span>`:''}${note?`<span class="badge badge-necessario">${note}</span>`:''}</div></div>`;
     });
-    if (totMensile > 0) {
-      html = `<div class="card full" style="margin-bottom:16px">
-        <div class="card-label">Totale mensile abbonamenti</div>
-        <div class="card-value negative">${fmt(totMensile)}</div>
-        <div class="card-sub">${fmt(totMensile*12)}/anno</div></div>` + html;
-    }
-    document.getElementById('serviziContent').innerHTML = html || '<div class="empty">Nessun servizio trovato</div>';
-  } catch(e) {
-    document.getElementById('serviziContent').innerHTML = `<div class="empty">Errore caricamento Servizi.<br><small>${e.message}</small></div>`;
-  }
+    if(totMensile>0)html=`<div class="card full" style="margin-bottom:16px"><div class="card-label">Totale mensile abbonamenti</div><div class="card-value negative">${fmt(totMensile)}</div><div class="card-sub">${fmt(totMensile*12)}/anno</div></div>`+html;
+    document.getElementById('serviziContent').innerHTML=html||'<div class="empty">Nessun servizio trovato</div>';
+  }catch(e){document.getElementById('serviziContent').innerHTML=`<div class="empty">Errore caricamento Servizi.<br><small>${e.message}</small></div>`;}
 }
 
-// ── UTILITY ─────────────────────────────────────────────────
-function parseDate(v) {
-  if (!v && v !== 0) return null;
-  if (typeof v === 'number') return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
-  if (typeof v === 'string') return v.split('T')[0];
+// ── UTILITY ───────────────────────────────────────────────────
+function parseDate(v){
+  if(!v&&v!==0)return null;
+  if(typeof v==='number')return new Date((v-25569)*86400*1000).toISOString().split('T')[0];
+  if(typeof v==='string')return v.split('T')[0];
   return null;
 }
-
-function sameYM(dateStr, y, m) {
-  if (!dateStr) return false;
-  const parts = String(dateStr).split('-');
-  return parseInt(parts[0]) === y && parseInt(parts[1]) - 1 === m;
+function sameYM(dateStr,y,m){
+  if(!dateStr)return false;
+  const p=String(dateStr).split('-');
+  return parseInt(p[0])===y&&parseInt(p[1])-1===m;
 }
-
-function fmt(n) {
-  return new Intl.NumberFormat('it-IT', { minimumFractionDigits:2, maximumFractionDigits:2 }).format(n) + ' €';
+function fmt(n){return new Intl.NumberFormat('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+' €';}
+function formatDate(raw){
+  if(!raw)return'';
+  try{return new Date(raw).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});}
+  catch{return raw;}
 }
-
-function formatDate(raw) {
-  if (!raw) return '';
-  try { return new Date(raw).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' }); }
-  catch { return raw; }
-}
-
-function showToast(msg, type='') {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show ' + type;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show '+type;
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.className='toast', 2800);
+  t._timer=setTimeout(()=>t.className='toast',2800);
 }
 </script>
 </body>
