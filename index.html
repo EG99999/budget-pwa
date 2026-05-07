@@ -840,27 +840,35 @@ window.addEventListener('load', async () => {
   const btnLogin = document.getElementById('btnLogin');
   if (btnLogin) btnLogin.disabled = false;
 
-  // gestisce redirect dopo login
+  // gestisce il ritorno dal redirect Microsoft
   try {
     const resp = await msalInstance.handleRedirectPromise();
-    if (resp) accessToken = resp.accessToken;
-  } catch(e) {}
+    if (resp && resp.accessToken) {
+      accessToken = resp.accessToken;
+      msalInstance.setActiveAccount(resp.account);
+      checkSetup();
+      return;
+    }
+  } catch(e) {
+    showToast('Errore autenticazione: ' + e.message, 'error');
+  }
 
+  // controlla se c'è già un account salvato
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
-    await getToken();
-    checkSetup();
+    try {
+      await getToken();
+      checkSetup();
+    } catch(e) {
+      // token scaduto, serve nuovo login
+    }
   }
-  // else: mostra authScreen (già visibile)
 });
 
 async function login() {
   try {
-    const resp = await msalInstance.loginPopup({ scopes: SCOPES });
-    accessToken = resp.accessToken;
-    msalInstance.setActiveAccount(resp.account);
-    checkSetup();
+    await msalInstance.loginRedirect({ scopes: SCOPES });
   } catch(e) {
     showToast('Errore login: ' + e.message, 'error');
   }
