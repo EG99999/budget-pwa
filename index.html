@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Budget</title>
+<link rel="manifest" href="manifest.json">
+
+<!-- MSAL per autenticazione Microsoft -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/3.11.0/msal-browser.min.js"></script>
+
+<style>
+  /* ── RESET & BASE ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0f0f0f;
+    --surface:   #1a1a1a;
+    --surface2:  #242424;
+    --border:    #2e2e2e;
+    --text:      #f0ece4;
+    --text2:     #8a8580;
+    --accent:    #c8a97e;
+    --accent2:   #e8c99e;
+    --red:       #e05a5a;
+    --green:     #5aaa7a;
+    --radius:    14px;
+    --font:      'Georgia', serif;
+    --mono:      'Courier New', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* ── AUTH SCREEN ──────────────────────────────────────── */
+  #authScreen {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    padding: 40px 24px;
+  }
+
+  .auth-logo {
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  .auth-title {
+    font-size: 42px;
+    font-weight: normal;
+    color: var(--text);
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  .auth-title span {
+    color: var(--accent);
+  }
+
+  .auth-subtitle {
+    font-size: 14px;
+    color: var(--text2);
+    text-align: center;
+    line-height: 1.6;
+    max-width: 280px;
+  }
+
+  .btn-login {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: var(--radius);
+    padding: 16px 40px;
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn-login:active { transform: scale(0.97); opacity: 0.9; }
+
+  /* ── SETUP SCREEN ─────────────────────────────────────── */
+  #setupScreen {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 48px 24px 32px;
+    gap: 20px;
+    overflow-y: auto;
+  }
+
+  .setup-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .setup-step h3 {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .setup-step p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .setup-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .setup-input:focus { border-color: var(--accent); }
+
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: var(--radius);
+    padding: 15px;
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .btn-primary:active { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── APP SHELL ────────────────────────────────────────── */
+  #app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── HEADER ───────────────────────────────────────────── */
+  .app-header {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .header-month {
+    font-size: 13px;
+    color: var(--text2);
+    font-family: var(--mono);
+  }
+
+  /* ── CONTENT ──────────────────────────────────────────── */
+  .page {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px 100px;
+    display: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page.active { display: block; }
+
+  /* ── BOTTOM NAV ───────────────────────────────────────── */
+  .bottom-nav {
+    flex-shrink: 0;
+    display: flex;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.2s;
+    position: relative;
+  }
+
+  .nav-btn.active { color: var(--accent); }
+
+  .nav-btn .nav-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .nav-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 0 0 2px 2px;
+  }
+
+  /* ── DASHBOARD ────────────────────────────────────────── */
+  .summary-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .card.full { grid-column: 1 / -1; }
+
+  .card-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+
+  .card-value {
+    font-size: 26px;
+    font-weight: normal;
+    color: var(--text);
+    line-height: 1.1;
+  }
+
+  .card-value.positive { color: var(--green); }
+  .card-value.negative { color: var(--red); }
+
+  .card-sub {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  /* ── BARRE CATEGORIA ──────────────────────────────────── */
+  .section-title {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--text2);
+    font-family: var(--mono);
+    margin-bottom: 12px;
+    margin-top: 24px;
+  }
+
+  .category-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .cat-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .cat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 7px;
+  }
+
+  .cat-name {
+    font-size: 12px;
+    color: var(--text);
+    letter-spacing: 0.05em;
+  }
+
+  .cat-amount {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .bar-track {
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .cat-count {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    margin-top: 4px;
+  }
+
+  /* ── CONFRONTO MESE ───────────────────────────────────── */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .compare-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+
+  .compare-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .compare-val {
+    font-size: 20px;
+    color: var(--text);
+  }
+
+  .delta-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-top: 6px;
+  }
+
+  .delta-up   { background: rgba(224,90,90,0.15);  color: var(--red); }
+  .delta-down { background: rgba(90,170,122,0.15); color: var(--green); }
+  .delta-eq   { background: rgba(138,133,128,0.1); color: var(--text2); }
+
+  /* ── INSERIMENTO ──────────────────────────────────────── */
+  .form-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .form-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 13px 14px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* toggle USCITA / ENTRATA */
+  .senso-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .senso-btn {
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .senso-btn.active-uscita {
+    background: rgba(224,90,90,0.12);
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  .senso-btn.active-entrata {
+    background: rgba(90,170,122,0.12);
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .valore-display {
+    font-size: 42px;
+    text-align: center;
+    padding: 12px 0 4px;
+    color: var(--text);
+    font-weight: normal;
+    letter-spacing: -1px;
+    cursor: text;
+    min-height: 62px;
+    outline: none;
+  }
+
+  .valore-display.uscita { color: var(--red); }
+  .valore-display.entrata { color: var(--green); }
+  .valore-display.placeholder { color: var(--text2); font-size: 32px; }
+
+  .btn-save {
+    width: 100%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: all 0.2s;
+  }
+
+  .btn-save:active { transform: scale(0.98); opacity: 0.9; }
+  .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── LISTA TRANSAZIONI ────────────────────────────────── */
+  .tx-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .tx-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tx-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tx-dot.uscita  { background: var(--red); }
+  .tx-dot.entrata { background: var(--green); }
+
+  .tx-info { flex: 1; min-width: 0; }
+
+  .tx-cat {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .tx-desc {
+    font-size: 13px;
+    color: var(--text);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tx-date {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .tx-amount {
+    font-family: var(--mono);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .tx-amount.uscita  { color: var(--red); }
+  .tx-amount.entrata { color: var(--green); }
+
+  /* ── TOAST ────────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 999;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error   { border-color: var(--red);   color: var(--red); }
+
+  /* ── LOADING ──────────────────────────────────────────── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── EMPTY STATE ──────────────────────────────────────── */
+  .empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text2);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── MESE SELECTOR ────────────────────────────────────── */
+  .month-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .month-arrow {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .month-label {
+    flex: 1;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="authScreen">
+  <div class="auth-logo">Budget Personale</div>
+  <h1 class="auth-title">I tuoi<br><span>soldi</span>,<br>sempre con te.</h1>
+  <p class="auth-subtitle">Accedi con il tuo account Microsoft per sincronizzare il tuo file Excel su OneDrive.</p>
+  <button class="btn-login" onclick="login()">Accedi con Microsoft</button>
+</div>
+
+<!-- SETUP (prima volta) -->
+<div id="setupScreen" style="display:none">
+  <h2 style="font-size:22px;font-weight:normal;color:var(--accent)">Configurazione</h2>
+  <p style="font-size:14px;color:var(--text2);line-height:1.6">Prima di tutto devi indicarmi dove si trova il tuo file Excel su OneDrive.</p>
+
+  <div class="setup-step">
+    <h3>Percorso file Excel</h3>
+    <p>Inserisci il percorso del file su OneDrive (es: <code style="color:var(--accent);font-size:12px">Documenti/Budget/COSTI_ANNUALI_2026.xlsx</code>)</p>
+    <input class="setup-input" id="filePathInput" type="text" placeholder="Documenti/COSTI_ANNUALI_2026.xlsx">
+  </div>
+
+  <div class="setup-step">
+    <h3>Nome tabella</h3>
+    <p>Il nome della Tabella Excel in INSERIMENTO COSTI (default: TblTransazioni)</p>
+    <input class="setup-input" id="tableNameInput" type="text" placeholder="TblTransazioni" value="TblTransazioni">
+  </div>
+
+  <button class="btn-primary" onclick="saveConfig()">Conferma e continua</button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div class="app-header">
+    <div class="header-title">Budget</div>
+    <div class="header-month" id="headerMonth"></div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="pageDash">
+    <div id="dashContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
+  </div>
+
+  <!-- INSERIMENTO -->
+  <div class="page" id="pageAdd">
+    <!-- SENSO -->
+    <div class="senso-toggle">
+      <button class="senso-btn active-uscita" id="btnUscita" onclick="setSenso('USCITA')">Uscita</button>
+      <button class="senso-btn" id="btnEntrata" onclick="setSenso('ENTRATA')">Entrata</button>
+    </div>
+
+    <!-- IMPORTO -->
+    <div class="form-section">
+      <span class="form-label">Importo</span>
+      <div class="valore-display uscita placeholder" id="valoreDisplay" onclick="focusValore()">0,00</div>
+      <input type="number" id="valoreHidden" step="0.01" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px" inputmode="decimal" onchange="updateValoreDisplay()" oninput="updateValoreDisplay()">
+    </div>
+
+    <!-- CATEGORIA + CADENZA -->
+    <div class="form-section">
+      <div class="form-row">
+        <div>
+          <span class="form-label">Categoria</span>
+          <select class="form-select" id="fTipologia">
+            <option value="">Seleziona</option>
+            <option>ACQUISTI ONLINE</option><option>ALTRI REDDITI</option>
+            <option>CASA</option><option>CIBO</option>
+            <option>HOBBY/COLLEZIONISMO</option><option>INVESTIMENTI</option>
+            <option>MEDICALE</option><option>PROGETTI</option>
+            <option>REGALI</option><option>RISTORANTI</option>
+            <option>SPORT</option><option>SPESA VARIA</option>
+            <option>STIPENDIO</option><option>SVAGHI</option>
+            <option>TELEFONIA</option><option>TRASPORTI PRIVATI</option>
+            <option>TRASPORTI PUBBLICI</option><option>VIAGGI</option>
+          </select>
+        </div>
+        <div>
+          <span class="form-label">Cadenza</span>
+          <select class="form-select" id="fCadenza">
+            <option>SECCA</option><option>MENSILE</option>
+            <option>SETTIMANALE</option><option>ANNUALE</option>
+            <option>BIMENSILE</option><option>TRIMESTRALE</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- METODO + MEZZO -->
+    <div class="form-section">
+      <div class="form-row">
+        <div>
+          <span class="form-label">Metodo</span>
+          <select class="form-select" id="fMetodo">
+            <option>ELETTRONICO</option><option>CONTANTI</option>
+          </select>
+        </div>
+        <div>
+          <span class="form-label">Mezzo</span>
+          <select class="form-select" id="fMezzo">
+            <option>CARTA DI CREDITO</option><option>ADDEBITO CONTO</option>
+            <option>BONIFICO</option><option>ACCREDITO CONTO</option>
+            <option>CONTANTI</option><option>PAYPAL</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATA + DESC -->
+    <div class="form-section">
+      <div class="form-row" style="margin-bottom:10px">
+        <div>
+          <span class="form-label">Data</span>
+          <input class="form-input" type="date" id="fData">
+        </div>
+      </div>
+      <span class="form-label">Descrizione</span>
+      <input class="form-input" type="text" id="fDesc" placeholder="Opzionale" autocomplete="off">
+    </div>
+
+    <button class="btn-save" id="btnSave" onclick="salvaTransazione()">Salva transazione</button>
+  </div>
+
+  <!-- LISTA -->
+  <div class="page" id="pageLista">
+    <div class="month-selector">
+      <button class="month-arrow" onclick="cambiaListaMese(-1)">‹</button>
+      <div class="month-label" id="listaMeseLabel"></div>
+      <button class="month-arrow" onclick="cambiaListaMese(1)">›</button>
+    </div>
+    <div id="listaContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="navDash" onclick="showPage('dash')">
+      <span class="nav-icon">◈</span>Dashboard
+    </button>
+    <button class="nav-btn" id="navAdd" onclick="showPage('add')">
+      <span class="nav-icon">⊕</span>Aggiungi
+    </button>
+    <button class="nav-btn" id="navLista" onclick="showPage('lista')">
+      <span class="nav-icon">≡</span>Lista
+    </button>
+  </nav>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ─────────────────────────────────────────────────
+const CLIENT_ID   = '1bb6501e-437c-472e-b1cf-a1b2fc95c978';   // ← da Azure portal
+const SCOPES      = ['Files.ReadWrite', 'User.Read'];
+
+const MESI_IT = ['GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO',
+                 'LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
+
+// ── MSAL ────────────────────────────────────────────────────
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: 'https://login.microsoftonline.com/consumers',
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: 'localStorage' }
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+// ── STATE ────────────────────────────────────────────────────
+let accessToken = null;
+let driveItemId = null;  // id del file Excel su OneDrive
+let currentSenso = 'USCITA';
+let dashMese = { y: new Date().getFullYear(), m: new Date().getMonth() };
+let listaMese = { y: new Date().getFullYear(), m: new Date().getMonth() };
+
+// ── INIT ────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  await msalInstance.initialize();
+
+  // gestisce redirect dopo login
+  try {
+    const resp = await msalInstance.handleRedirectPromise();
+    if (resp) accessToken = resp.accessToken;
+  } catch(e) {}
+
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    msalInstance.setActiveAccount(accounts[0]);
+    await getToken();
+    checkSetup();
+  }
+  // else: mostra authScreen (già visibile)
+});
+
+async function login() {
+  try {
+    await msalInstance.loginRedirect({ scopes: SCOPES });
+  } catch(e) { showToast('Errore login: ' + e.message, 'error'); }
+}
+
+async function getToken() {
+  try {
+    const res = await msalInstance.acquireTokenSilent({ scopes: SCOPES });
+    accessToken = res.accessToken;
+  } catch(e) {
+    await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
+  }
+}
+
+// ── SETUP ───────────────────────────────────────────────────
+function checkSetup() {
+  const cfg = getConfig();
+  if (!cfg) {
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('setupScreen').style.display = 'flex';
+  } else {
+    startApp();
+  }
+}
+
+function getConfig() {
+  const s = localStorage.getItem('budgetConfig');
+  return s ? JSON.parse(s) : null;
+}
+
+async function saveConfig() {
+  const filePath  = document.getElementById('filePathInput').value.trim();
+  const tableName = document.getElementById('tableNameInput').value.trim() || 'TblTransazioni';
+  if (!filePath) { showToast('Inserisci il percorso del file', 'error'); return; }
+
+  showToast('Verifica file in corso…');
+
+  // cerca il file su OneDrive
+  try {
+    const encoded = encodeURIComponent(filePath);
+    const res = await apiGet(`/me/drive/root:/${encoded}`);
+    if (!res.id) throw new Error('File non trovato');
+
+    localStorage.setItem('budgetConfig', JSON.stringify({
+      filePath, tableName, fileId: res.id
+    }));
+    showToast('Configurazione salvata', 'success');
+    setTimeout(startApp, 800);
+  } catch(e) {
+    showToast('File non trovato: controlla il percorso', 'error');
+  }
+}
+
+// ── APP START ────────────────────────────────────────────────
+function startApp() {
+  document.getElementById('authScreen').style.display  = 'none';
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('app').style.display         = 'flex';
+
+  // data default form = oggi
+  const today = new Date();
+  document.getElementById('fData').value = today.toISOString().split('T')[0];
+  updateHeaderMonth();
+  loadDashboard();
+}
+
+function updateHeaderMonth() {
+  const now = new Date();
+  document.getElementById('headerMonth').textContent =
+    MESI_IT[now.getMonth()].slice(0,3) + ' ' + now.getFullYear();
+}
+
+// ── NAVIGAZIONE ─────────────────────────────────────────────
+function showPage(page) {
+  ['dash','add','lista'].forEach(p => {
+    document.getElementById('page' + cap(p)).classList.toggle('active', p === page);
+    document.getElementById('nav'  + cap(p)).classList.toggle('active', p === page);
+  });
+  if (page === 'lista') renderLista();
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ── GRAPH API ────────────────────────────────────────────────
+async function apiGet(path) {
+  await getToken();
+  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function apiPost(path, body) {
+  await getToken();
+  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + accessToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ── LEGGI TRANSAZIONI ────────────────────────────────────────
+let cachedRows = null;
+let cacheTime  = 0;
+
+async function getTransazioni() {
+  const now = Date.now();
+  if (cachedRows && now - cacheTime < 60000) return cachedRows; // 60s cache
+
+  const cfg = getConfig();
+  const data = await apiGet(
+    `/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`
+  );
+
+  // ogni row.values è un array di array: [[SENSO, TIPOLOGIA, VALORE, ...]]
+  // col: 0=SENSO 1=TIPOLOGIA 2=VALORE 3=CADENZA 4=DESCRIZIONE
+  //      5=METODO 6=MEZZO 7=DATA 8=MESE
+  cachedRows = (data.value || []).map(r => ({
+    senso:      r.values[0][0],
+    tipologia:  r.values[0][1],
+    valore:     parseFloat(r.values[0][2]) || 0,
+    cadenza:    r.values[0][3],
+    descrizione:r.values[0][4],
+    metodo:     r.values[0][5],
+    mezzo:      r.values[0][6],
+    data:       r.values[0][7],
+    mese:       r.values[0][8]
+  })).filter(r => r.valore !== 0);
+
+  cacheTime = now;
+  return cachedRows;
+}
+
+function invalidateCache() { cachedRows = null; }
+
+// ── DASHBOARD ────────────────────────────────────────────────
+async function loadDashboard() {
+  document.getElementById('dashContent').innerHTML =
+    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+
+  try {
+    const rows = await getTransazioni();
+    const now  = new Date();
+    const y = dashMese.y, m = dashMese.m;
+    const meseName = MESI_IT[m];
+
+    const thisMonth = rows.filter(r => {
+      const d = new Date(r.data);
+      return d.getFullYear() === y && d.getMonth() === m;
+    });
+
+    // mese precedente
+    const pm = m === 0 ? 11 : m - 1;
+    const py = m === 0 ? y - 1 : y;
+    const prevMonth = rows.filter(r => {
+      const d = new Date(r.data);
+      return d.getFullYear() === py && d.getMonth() === pm;
+    });
+
+    const totUscite   = thisMonth.filter(r => r.valore < 0).reduce((s,r) => s + r.valore, 0);
+    const totEntrate  = thisMonth.filter(r => r.valore > 0).reduce((s,r) => s + r.valore, 0);
+    const saldo       = totUscite + totEntrate;
+
+    const prevUscite  = prevMonth.filter(r => r.valore < 0).reduce((s,r) => s + r.valore, 0);
+    const delta       = prevUscite !== 0 ? ((totUscite - prevUscite) / Math.abs(prevUscite)) * 100 : 0;
+
+    // raggruppamento per categoria (solo uscite)
+    const byCat = {};
+    thisMonth.filter(r => r.valore < 0).forEach(r => {
+      const cat = r.tipologia || 'ALTRO';
+      if (!byCat[cat]) byCat[cat] = { tot: 0, count: 0 };
+      byCat[cat].tot   += Math.abs(r.valore);
+      byCat[cat].count += 1;
+    });
+
+    const catArr = Object.entries(byCat)
+      .sort((a,b) => b[1].tot - a[1].tot);
+    const maxVal = catArr.length > 0 ? catArr[0][1].tot : 1;
+
+    // delta badge
+    const absDelta = Math.abs(delta);
+    let deltaBadge = '';
+    if (absDelta < 1) {
+      deltaBadge = `<span class="delta-badge delta-eq">= vs ${MESI_IT[pm].slice(0,3)}</span>`;
+    } else if (delta > 0) {
+      deltaBadge = `<span class="delta-badge delta-up">+${absDelta.toFixed(0)}% vs ${MESI_IT[pm].slice(0,3)}</span>`;
+    } else {
+      deltaBadge = `<span class="delta-badge delta-down">-${absDelta.toFixed(0)}% vs ${MESI_IT[pm].slice(0,3)}</span>`;
+    }
+
+    const html = `
+      <div class="month-selector" style="margin-bottom:16px">
+        <button class="month-arrow" onclick="cambiadashmese(-1)">‹</button>
+        <div class="month-label">${meseName} ${y}</div>
+        <button class="month-arrow" onclick="cambiadashmese(1)">›</button>
+      </div>
+
+      <div class="summary-cards">
+        <div class="card">
+          <div class="card-label">Uscite</div>
+          <div class="card-value negative">${fmt(Math.abs(totUscite))}</div>
+          <div class="card-sub">${deltaBadge}</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Entrate</div>
+          <div class="card-value positive">${fmt(totEntrate)}</div>
+          <div class="card-sub">&nbsp;</div>
+        </div>
+        <div class="card full">
+          <div class="card-label">Saldo mese</div>
+          <div class="card-value ${saldo >= 0 ? 'positive' : 'negative'}">${saldo >= 0 ? '+' : ''}${fmt(saldo)}</div>
+        </div>
+      </div>
+
+      <div class="section-title">Spese per categoria</div>
+      <div class="category-list">
+        ${catArr.length === 0
+          ? '<div class="empty">Nessuna spesa questo mese</div>'
+          : catArr.map(([cat, d]) => `
+            <div class="cat-item">
+              <div class="cat-header">
+                <span class="cat-name">${cat}</span>
+                <span class="cat-amount">${fmt(d.tot)}</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${(d.tot/maxVal*100).toFixed(1)}%"></div>
+              </div>
+              <div class="cat-count">${d.count} transazion${d.count===1?'e':'i'}</div>
+            </div>
+          `).join('')
+        }
+      </div>
+    `;
+
+    document.getElementById('dashContent').innerHTML = html;
+  } catch(e) {
+    document.getElementById('dashContent').innerHTML =
+      `<div class="empty">Errore caricamento dati.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function cambiadashmese(dir) {
+  dashMese.m += dir;
+  if (dashMese.m > 11) { dashMese.m = 0;  dashMese.y++; }
+  if (dashMese.m < 0)  { dashMese.m = 11; dashMese.y--; }
+  loadDashboard();
+}
+
+// ── LISTA TRANSAZIONI ────────────────────────────────────────
+async function renderLista() {
+  document.getElementById('listaMeseLabel').textContent =
+    MESI_IT[listaMese.m].slice(0,3) + ' ' + listaMese.y;
+
+  document.getElementById('listaContent').innerHTML =
+    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+
+  try {
+    const rows = await getTransazioni();
+    const { y, m } = listaMese;
+
+    const filtered = rows
+      .filter(r => {
+        const d = new Date(r.data);
+        return d.getFullYear() === y && d.getMonth() === m;
+      })
+      .sort((a,b) => new Date(b.data) - new Date(a.data));
+
+    if (filtered.length === 0) {
+      document.getElementById('listaContent').innerHTML =
+        '<div class="empty">Nessuna transazione<br>per questo mese</div>';
+      return;
+    }
+
+    document.getElementById('listaContent').innerHTML = `
+      <div class="tx-list">
+        ${filtered.map(r => `
+          <div class="tx-item">
+            <div class="tx-dot ${r.valore < 0 ? 'uscita' : 'entrata'}"></div>
+            <div class="tx-info">
+              <div class="tx-cat">${r.tipologia}</div>
+              <div class="tx-desc">${r.descrizione || '—'}</div>
+              <div class="tx-date">${formatDate(r.data)}</div>
+            </div>
+            <div class="tx-amount ${r.valore < 0 ? 'uscita' : 'entrata'}">
+              ${r.valore < 0 ? '' : '+'}${fmt(Math.abs(r.valore))}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch(e) {
+    document.getElementById('listaContent').innerHTML =
+      `<div class="empty">Errore: ${e.message}</div>`;
+  }
+}
+
+function cambiaListaMese(dir) {
+  listaMese.m += dir;
+  if (listaMese.m > 11) { listaMese.m = 0;  listaMese.y++; }
+  if (listaMese.m < 0)  { listaMese.m = 11; listaMese.y--; }
+  renderLista();
+}
+
+// ── INSERIMENTO ──────────────────────────────────────────────
+function setSenso(senso) {
+  currentSenso = senso;
+  document.getElementById('btnUscita').className  = 'senso-btn' + (senso==='USCITA'  ? ' active-uscita'  : '');
+  document.getElementById('btnEntrata').className = 'senso-btn' + (senso==='ENTRATA' ? ' active-entrata' : '');
+  updateValoreDisplay();
+}
+
+function focusValore() {
+  document.getElementById('valoreHidden').focus();
+}
+
+function updateValoreDisplay() {
+  const inp = document.getElementById('valoreHidden');
+  const el  = document.getElementById('valoreDisplay');
+  const v   = parseFloat(inp.value);
+
+  if (!inp.value || isNaN(v) || v === 0) {
+    el.textContent = '0,00';
+    el.className   = 'valore-display placeholder';
+  } else {
+    el.textContent = fmt(Math.abs(v));
+    el.className   = 'valore-display ' + currentSenso.toLowerCase();
+  }
+}
+
+async function salvaTransazione() {
+  const vRaw = parseFloat(document.getElementById('valoreHidden').value);
+  const tip  = document.getElementById('fTipologia').value;
+  const data = document.getElementById('fData').value;
+
+  if (!vRaw || isNaN(vRaw)) { showToast('Inserisci un importo', 'error'); return; }
+  if (!tip)  { showToast('Seleziona una categoria', 'error'); return; }
+  if (!data) { showToast('Inserisci una data', 'error'); return; }
+
+  const v     = currentSenso === 'USCITA' ? -Math.abs(vRaw) : Math.abs(vRaw);
+  const dObj  = new Date(data);
+  const mese  = MESI_IT[dObj.getMonth()];
+
+  const row = [
+    currentSenso,
+    tip,
+    v,
+    document.getElementById('fCadenza').value,
+    document.getElementById('fDesc').value,
+    document.getElementById('fMetodo').value,
+    document.getElementById('fMezzo').value,
+    data,          // Graph API vuole ISO date
+    mese
+  ];
+
+  const btn = document.getElementById('btnSave');
+  btn.disabled   = true;
+  btn.textContent = 'Salvataggio…';
+
+  try {
+    const cfg = getConfig();
+    await apiPost(
+      `/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`,
+      { values: [row] }
+    );
+    invalidateCache();
+    showToast('Transazione salvata', 'success');
+
+    // reset form
+    document.getElementById('valoreHidden').value = '';
+    document.getElementById('fDesc').value = '';
+    document.getElementById('fTipologia').value = '';
+    document.getElementById('fCadenza').value = 'SECCA';
+    document.getElementById('fData').value = new Date().toISOString().split('T')[0];
+    updateValoreDisplay();
+
+  } catch(e) {
+    showToast('Errore: ' + e.message, 'error');
+  } finally {
+    btn.disabled   = false;
+    btn.textContent = 'Salva transazione';
+  }
+}
+
+// ── UTILITY ─────────────────────────────────────────────────
+function fmt(n) {
+  return new Intl.NumberFormat('it-IT', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(n) + ' €';
+}
+
+function formatDate(raw) {
+  if (!raw) return '';
+  try {
+    const d = new Date(raw);
+    return d.toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' });
+  } catch { return raw; }
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = 'toast', 2800);
+}
+</script>
+</body>
+</html>
