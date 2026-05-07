@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 
 <!-- MSAL per autenticazione Microsoft -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/3.11.0/msal-browser.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 
 <style>
   /* ── RESET & BASE ─────────────────────────────────────── */
@@ -834,9 +834,7 @@ let listaMese = { y: new Date().getFullYear(), m: new Date().getMonth() };
 
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
-  await msalInstance.initialize();
-
-  // abilita pulsante solo dopo init
+  // MSAL v2: niente initialize(), abilita subito il pulsante
   const btnLogin = document.getElementById('btnLogin');
   if (btnLogin) btnLogin.disabled = false;
 
