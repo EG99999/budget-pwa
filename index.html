@@ -277,9 +277,9 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
   <!-- LISTA -->
   <div class="page" id="pageLista">
     <div class="month-selector">
-      <button class="month-arrow" onclick="cambiaListaMese(-1)">‹</button>
+      <button class="month-arrow" onclick="cambiaListaMese(-1)">&#8249;</button>
       <div class="month-label" id="listaMeseLabel"></div>
-      <button class="month-arrow" onclick="cambiaListaMese(1)">›</button>
+      <button class="month-arrow" onclick="cambiaListaMese(1)">&#8250;</button>
     </div>
     <div id="listaContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
@@ -299,14 +299,32 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     <div id="serviziContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
 
+  <!-- CRUSCOTTO -->
+  <div class="page" id="pageCruscotto">
+    <div id="cruscottoContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
+  </div>
+
+  <!-- CFO -->
+  <div class="page" id="pageCfo">
+    <div id="cfoContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
+  </div>
+
+  <!-- ANNUALE -->
+  <div class="page" id="pageAnnuale">
+    <div id="annualeContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
+  </div>
+
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
-    <button class="nav-btn active" id="navDash"     onclick="showPage('dash')">    <span class="nav-icon">◈</span>Dash</button>
-    <button class="nav-btn"        id="navAdd"      onclick="showPage('add')">     <span class="nav-icon">⊕</span>Aggiungi</button>
-    <button class="nav-btn"        id="navLista"    onclick="showPage('lista')">   <span class="nav-icon">≡</span>Lista</button>
-    <button class="nav-btn"        id="navBudget"   onclick="showPage('budget')">  <span class="nav-icon">🎯</span>Budget</button>
-    <button class="nav-btn"        id="navCasa"     onclick="showPage('casa')">    <span class="nav-icon">🏠</span>Casa</button>
-    <button class="nav-btn"        id="navServizi"  onclick="showPage('servizi')"> <span class="nav-icon">🔄</span>Servizi</button>
+    <button class="nav-btn active" id="navDash"       onclick="showPage('dash')">      <span class="nav-icon">&#9672;</span>Dash</button>
+    <button class="nav-btn"        id="navAdd"         onclick="showPage('add')">       <span class="nav-icon">&#8853;</span>Aggiungi</button>
+    <button class="nav-btn"        id="navLista"       onclick="showPage('lista')">     <span class="nav-icon">&#8801;</span>Lista</button>
+    <button class="nav-btn"        id="navBudget"      onclick="showPage('budget')">    <span class="nav-icon">&#127919;</span>Budget</button>
+    <button class="nav-btn"        id="navAnnuale"     onclick="showPage('annuale')">   <span class="nav-icon">&#128197;</span>Annuale</button>
+    <button class="nav-btn"        id="navCruscotto"   onclick="showPage('cruscotto')"> <span class="nav-icon">&#128188;</span>Cruscotto</button>
+    <button class="nav-btn"        id="navCfo"         onclick="showPage('cfo')">       <span class="nav-icon">&#128200;</span>CFO</button>
+    <button class="nav-btn"        id="navCasa"        onclick="showPage('casa')">      <span class="nav-icon">&#127968;</span>Casa</button>
+    <button class="nav-btn"        id="navServizi"     onclick="showPage('servizi')">   <span class="nav-icon">&#128260;</span>Servizi</button>
   </nav>
 </div>
 
@@ -457,17 +475,20 @@ function updateHeaderMonth() {
 }
 
 // ── NAVIGAZIONE ─────────────────────────────────────────────
-const ALL_PAGES = ['dash','add','lista','budget','casa','servizi'];
+const ALL_PAGES = ['dash','add','lista','budget','annuale','cruscotto','cfo','casa','servizi'];
 
 function showPage(page) {
   ALL_PAGES.forEach(p => {
     document.getElementById('page' + cap(p)).classList.toggle('active', p === page);
     document.getElementById('nav'  + cap(p)).classList.toggle('active', p === page);
   });
-  if (page === 'lista')   renderLista();
-  if (page === 'budget')  loadBudget();
-  if (page === 'casa')    loadCasa();
-  if (page === 'servizi') loadServizi();
+  if (page === 'lista')     renderLista();
+  if (page === 'budget')    loadBudget();
+  if (page === 'annuale')   loadAnnuale();
+  if (page === 'cruscotto') loadCruscotto();
+  if (page === 'cfo')       loadCfo();
+  if (page === 'casa')      loadCasa();
+  if (page === 'servizi')   loadServizi();
 }
 
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -561,9 +582,9 @@ async function loadDashboard() {
 
     document.getElementById('dashContent').innerHTML = `
       <div class="month-selector" style="margin-bottom:16px">
-        <button class="month-arrow" onclick="cambiadashmese(-1)">‹</button>
+        <button class="month-arrow" onclick="cambiadashmese(-1)">&#8249;</button>
         <div class="month-label">${MESI_IT[m]} ${y}</div>
-        <button class="month-arrow" onclick="cambiadashmese(1)">›</button>
+        <button class="month-arrow" onclick="cambiadashmese(1)">&#8250;</button>
       </div>
       <div class="summary-cards">
         <div class="card"><div class="card-label">Uscite</div><div class="card-value negative">${fmt(Math.abs(totUscite))}</div><div class="card-sub">${deltaBadge}</div></div>
@@ -709,28 +730,25 @@ async function loadBudget() {
     const txns = await getTransazioni();
     const { y, m } = budgetMese;
 
-    // Calcola spese reali per categoria nel mese selezionato
     const actuals = {};
     txns.filter(r => { const d=new Date(r.data); return d.getFullYear()===y && d.getMonth()===m; })
         .forEach(r => { const cat=r.tipologia||'ALTRO'; actuals[cat]=(actuals[cat]||0)+r.valore; });
 
-    const mIdx = m + 1; // col 0=CATEGORIA, 1=GEN...12=DIC
+    const mIdx = m + 1;
 
     let html = `
       <div class="month-selector" style="margin-bottom:16px">
-        <button class="month-arrow" onclick="cambiaBudgetMese(-1)">‹</button>
+        <button class="month-arrow" onclick="cambiaBudgetMese(-1)">&#8249;</button>
         <div class="month-label">${MESI_IT[m]} ${y}</div>
-        <button class="month-arrow" onclick="cambiaBudgetMese(1)">›</button>
+        <button class="month-arrow" onclick="cambiaBudgetMese(1)">&#8250;</button>
       </div>`;
 
     let isEntrata = false;
-    // Riga 0 = header, righe 1-28 = dati
     for (let i = 1; i < budgetCache.length; i++) {
       const row = budgetCache[i];
       const cat = String(row[0] || '').trim();
       if (!cat) continue;
 
-      // Separatori di sezione
       if (cat.includes('──')) {
         const label = cat.replace(/──/g,'').trim();
         isEntrata = label.includes('ENTRATE');
@@ -738,10 +756,8 @@ async function loadBudget() {
         continue;
       }
 
-      // Righe di riepilogo (totali)
       if (cat.startsWith('TOT') || cat === 'SALDO') {
         const budget = parseFloat(row[mIdx]) || 0;
-        const isPositive = parseFloat(row[mIdx]) >= 0;
         html += `<div class="cat-item">
           <div class="cat-header">
             <span class="cat-name" style="color:var(--accent)">${cat}</span>
@@ -799,21 +815,19 @@ async function loadCasa() {
       const data = await readRange('PANNELLO CASA', 'A29:O36');
       casaCache = data.values;
     }
-    // values[0]=titolo, values[1]=header, values[2..6]=dati, values[7]=TOTALE
     const now = new Date();
-    const mIdx = now.getMonth() + 1; // col 1=GEN...12=DIC, 13=TOT, 14=MEDIA
+    const mIdx = now.getMonth() + 1;
 
     let html = '<div class="summary-cards">';
     let totaleRow = null;
 
-    // Schede YTD (righe 2 in poi, saltando titolo e header)
     casaCache.slice(2).forEach(row => {
       const name = String(row[0]||'').replace('🏠 ','').trim();
       if (!name) return;
       const ytd = parseFloat(row[13]) || 0;
       const avg = parseFloat(row[14]) || 0;
       if (name.toUpperCase().includes('TOTALE')) {
-        totaleRow = { name: 'Totale casa YTD', ytd, avg, row };
+        totaleRow = { name: 'Totale casa YTD', ytd, avg };
       } else {
         html += `<div class="card">
           <div class="card-label">${name}</div>
@@ -832,7 +846,6 @@ async function loadCasa() {
     }
     html += '</div>';
 
-    // Dettaglio mese corrente
     html += `<div class="section-title">${MESI_IT[now.getMonth()]} ${now.getFullYear()}</div>`;
     html += '<div class="cat-item">';
     casaCache.slice(2).forEach(row => {
@@ -855,6 +868,238 @@ async function loadCasa() {
   }
 }
 
+// ── CRUSCOTTO ────────────────────────────────────────────────
+async function loadCruscotto() {
+  document.getElementById('cruscottoContent').innerHTML =
+    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try {
+    const txns = await getTransazioni();
+    const y = new Date().getFullYear();
+    const ytd = txns.filter(r => String(r.data||'').startsWith(y));
+
+    const entrateYtd = ytd.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
+    const usciteYtd  = ytd.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
+    const saldoYtd   = entrateYtd + usciteYtd;
+    const savingRate = entrateYtd > 0 ? (saldoYtd/entrateYtd*100) : 0;
+
+    const months = Array.from({length:12},(_,m) => {
+      const mt = ytd.filter(r=>sameYM(r.data,y,m));
+      const u = mt.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
+      const e = mt.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
+      return {m, u, e, s:u+e, ok:mt.length>0};
+    });
+
+    const byCat = {};
+    ytd.filter(r=>r.valore<0).forEach(r=>{const c=r.tipologia||'ALTRO';byCat[c]=(byCat[c]||0)+Math.abs(r.valore);});
+    const topCats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const maxCat = topCats.length>0 ? topCats[0][1] : 1;
+
+    document.getElementById('cruscottoContent').innerHTML = `
+      <div class="summary-cards">
+        <div class="card"><div class="card-label">Entrate YTD</div><div class="card-value positive">${fmt(entrateYtd)}</div></div>
+        <div class="card"><div class="card-label">Uscite YTD</div><div class="card-value negative">${fmt(Math.abs(usciteYtd))}</div></div>
+        <div class="card"><div class="card-label">Saldo YTD</div><div class="card-value ${saldoYtd>=0?'positive':'negative'}">${saldoYtd>=0?'+':''}${fmt(saldoYtd)}</div></div>
+        <div class="card"><div class="card-label">Saving Rate</div><div class="card-value ${savingRate>=20?'positive':savingRate>=0?'':'negative'}">${savingRate.toFixed(1)}%</div></div>
+        <div class="card full"><div class="card-label">Transazioni registrate YTD</div><div class="card-value">${ytd.length}</div><div class="card-sub">${y}</div></div>
+      </div>
+      <div class="section-title">Riepilogo mensile ${y}</div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;min-width:320px">
+          <tr style="color:var(--text2)">
+            <td style="padding:5px 6px 5px 0;white-space:nowrap">MESE</td>
+            <td style="padding:5px 6px;text-align:right;white-space:nowrap">USCITE</td>
+            <td style="padding:5px 6px;text-align:right;white-space:nowrap">ENTRATE</td>
+            <td style="padding:5px 6px;text-align:right;white-space:nowrap">SALDO</td>
+          </tr>
+          ${months.map(mo => mo.ok ? `
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:5px 6px 5px 0;color:var(--text);white-space:nowrap">${MESI_IT[mo.m].slice(0,3)}</td>
+              <td style="padding:5px 6px;text-align:right;color:var(--red);white-space:nowrap">${fmt(Math.abs(mo.u))}</td>
+              <td style="padding:5px 6px;text-align:right;color:var(--green);white-space:nowrap">${fmt(mo.e)}</td>
+              <td style="padding:5px 6px;text-align:right;color:${mo.s>=0?'var(--green)':'var(--red)'};white-space:nowrap">${mo.s>=0?'+':''}${fmt(mo.s)}</td>
+            </tr>` : `
+            <tr style="border-top:1px solid var(--border);opacity:.3">
+              <td style="padding:5px 6px 5px 0;white-space:nowrap">${MESI_IT[mo.m].slice(0,3)}</td>
+              <td colspan="3" style="padding:5px 6px;text-align:center;color:var(--text2)">—</td>
+            </tr>`).join('')}
+        </table>
+      </div>
+      <div class="section-title">Top spese per categoria</div>
+      <div class="category-list">
+        ${topCats.map(([cat,tot])=>`
+          <div class="cat-item">
+            <div class="cat-header"><span class="cat-name">${cat}</span><span class="cat-amount">${fmt(tot)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(tot/maxCat*100).toFixed(1)}%"></div></div>
+          </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    document.getElementById('cruscottoContent').innerHTML = `<div class="empty">Errore: ${e.message}</div>`;
+  }
+}
+
+// ── CFO ──────────────────────────────────────────────────────
+let cfoCache = null;
+
+async function loadCfo() {
+  document.getElementById('cfoContent').innerHTML =
+    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try {
+    if (!cfoCache) {
+      const data = await readRange('ANALISI CFO', 'B4:G51');
+      cfoCache = data.values;
+    }
+
+    const SKIP_LABELS = new Set(['INDICATORE','PARAMETRO','CATEGORIA','AREA','VOCE']);
+    let html = '';
+
+    cfoCache.forEach(row => {
+      const label = String(row[0]||'').trim();
+      if (!label) return;
+
+      if (label.startsWith('▌') || label.includes('PARAMETRI DI INPUT')) {
+        const title = label.replace(/▌/g,'').replace(/^\d+\.\s*/,'').trim();
+        html += `<div class="section-title">${title}</div>`;
+        return;
+      }
+      if (SKIP_LABELS.has(label)) return;
+
+      if (label.includes('PUNTEGGIO FINANZIARIO')) {
+        const score = parseFloat(row[3]) || 0;
+        const stato = String(row[4]||'').trim();
+        const sc = stato.includes('🟢')?'badge-attivo':stato.includes('🔴')?'badge-eliminare':'badge-valutare';
+        html += `<div class="cat-item" style="border-color:var(--accent)">
+          <div class="cat-header">
+            <span class="cat-name" style="color:var(--accent)">${label}</span>
+            <span class="cat-amount">${score.toFixed(1)}/10</span>
+          </div>
+          ${stato?`<div class="badge-row"><span class="badge ${sc}">${stato.replace(/[🟢🔴🟡🏆]/g,'').trim()}</span></div>`:''}
+        </div>`;
+        return;
+      }
+
+      let valRaw = row[1];
+      let target  = String(row[2]||'').trim();
+      let status  = String(row[3]||'').trim();
+      let note    = String(row[4]||'').trim();
+
+      if (!valRaw && row[2] !== undefined && typeof row[2] === 'number') {
+        valRaw = row[2]; target = ''; status = ''; note = String(row[3]||'').trim();
+      }
+
+      if (valRaw === null && !status) return;
+
+      let valStr = '—';
+      if (typeof valRaw === 'number') {
+        const isPercent = Math.abs(valRaw) <= 2 &&
+          (target.includes('%') || note.includes('%') || label.toLowerCase().includes('rate') || label.toLowerCase().includes('%'));
+        const isMesi = target.toLowerCase().includes('mes') || label.toLowerCase().includes('mesi') || label.toLowerCase().includes('runway');
+        if (isPercent)       valStr = (valRaw*100).toFixed(1) + '%';
+        else if (isMesi)     valStr = valRaw.toFixed(2) + ' mesi';
+        else if (Math.abs(valRaw) >= 10) valStr = fmt(valRaw);
+        else                 valStr = valRaw.toFixed(2);
+      } else if (valRaw) {
+        valStr = String(valRaw);
+      }
+
+      const sc = status.includes('🟢')?'badge-attivo':status.includes('🔴')?'badge-eliminare':status.includes('🟡')?'badge-valutare':'';
+      const statusLabel = status.replace(/[🟢🔴🟡□]/g,'').trim();
+
+      html += `<div class="cat-item">
+        <div class="cat-header">
+          <span class="cat-name" style="font-size:11px;line-height:1.4">${label}</span>
+          <span class="cat-amount ${sc==='badge-attivo'?'positive':sc==='badge-eliminare'?'negative':''}">${valStr}</span>
+        </div>
+        ${(target||statusLabel)?`<div class="badge-row" style="margin-top:5px">
+          ${target?`<span class="badge badge-necessario" style="font-size:9px">${target}</span>`:''}
+          ${statusLabel&&sc?`<span class="badge ${sc}" style="font-size:9px">${statusLabel}</span>`:''}
+        </div>`:''}
+        ${note?`<div class="cat-count" style="margin-top:4px">${note.length>65?note.slice(0,65)+'…':note}</div>`:''}
+      </div>`;
+    });
+
+    document.getElementById('cfoContent').innerHTML = html||'<div class="empty">Nessun dato CFO</div>';
+  } catch(e) {
+    document.getElementById('cfoContent').innerHTML = `<div class="empty">Errore caricamento CFO.<br><small>${e.message}</small></div>`;
+  }
+}
+
+// ── ANNUALE ──────────────────────────────────────────────────
+async function loadAnnuale() {
+  document.getElementById('annualeContent').innerHTML =
+    '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try {
+    if (!budgetCache) {
+      const data = await readRange('BUDGET MASTER', 'B4:R32');
+      budgetCache = data.values;
+    }
+    const txns = await getTransazioni();
+    const y = new Date().getFullYear();
+
+    const actuals = {};
+    txns.filter(r => String(r.data||'').startsWith(y)).forEach(r => {
+      const cat = r.tipologia||'ALTRO';
+      actuals[cat] = (actuals[cat]||0) + r.valore;
+    });
+
+    let totBudgetUscite = 0, totActualUscite = 0;
+    let totBudgetEntrate = 0, totActualEntrate = 0;
+
+    let html = '';
+    let isEntrate = false;
+
+    for (let i=1; i<budgetCache.length; i++) {
+      const row = budgetCache[i];
+      const cat = String(row[0]||'').trim();
+      if (!cat) continue;
+
+      if (cat.includes('──')) {
+        isEntrate = cat.includes('ENTRATE');
+        html += `<div class="section-title">${cat.replace(/──/g,'').trim()}</div>`;
+        continue;
+      }
+      if (cat.startsWith('TOT')||cat==='SALDO'||cat==='SAVING RATE %') continue;
+
+      const budgetAnnuo = parseFloat(row[13]) || 0;
+      const actual = actuals[cat] || 0;
+      if (budgetAnnuo===0 && actual===0) continue;
+
+      const actualAbs = Math.abs(actual);
+      const budgetAbs = Math.abs(budgetAnnuo);
+      const pct = budgetAbs>0 ? Math.min(130, actualAbs/budgetAbs*100) : (actualAbs>0?100:0);
+      const isOk = isEntrate ? actual>=budgetAnnuo : actualAbs<=budgetAbs;
+      const rimanente = budgetAbs - actualAbs;
+
+      if (isEntrate) { totBudgetEntrate+=budgetAbs; totActualEntrate+=actualAbs; }
+      else { totBudgetUscite+=budgetAbs; totActualUscite+=actualAbs; }
+
+      html += `<div class="cat-item">
+        <div class="cat-header">
+          <span class="cat-name">${cat}</span>
+          <span class="cat-amount ${isOk?'':'negative'}">${fmt(actualAbs)} / ${fmt(budgetAbs)}</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill ${isOk?'':'over'}" style="width:${pct.toFixed(1)}%"></div></div>
+        <div class="cat-count" style="display:flex;justify-content:space-between">
+          <span>${pct.toFixed(0)}% usato</span>
+          <span style="color:${rimanente>=0?'var(--green)':'var(--red)'}">${rimanente>=0?'Avanzano':'Sforati di'} ${fmt(Math.abs(rimanente))}</span>
+        </div>
+      </div>`;
+    }
+
+    const summary = `<div class="summary-cards" style="margin-bottom:20px">
+      <div class="card"><div class="card-label">Budget uscite ${y}</div><div class="card-value">${fmt(totBudgetUscite)}</div></div>
+      <div class="card"><div class="card-label">Speso YTD</div><div class="card-value ${totActualUscite<=totBudgetUscite?'positive':'negative'}">${fmt(totActualUscite)}</div></div>
+      <div class="card full"><div class="card-label">Margine rimanente</div>
+        <div class="card-value ${(totBudgetUscite-totActualUscite)>=0?'positive':'negative'}">${fmt(totBudgetUscite-totActualUscite)}</div>
+        <div class="card-sub">${((totActualUscite/totBudgetUscite)*100).toFixed(0)}% del budget annuale usato</div>
+      </div>
+    </div>`;
+
+    document.getElementById('annualeContent').innerHTML = summary + html;
+  } catch(e) {
+    document.getElementById('annualeContent').innerHTML = `<div class="empty">Errore: ${e.message}</div>`;
+  }
+}
+
 // ── SERVIZI ──────────────────────────────────────────────────
 let serviziCache = null;
 
@@ -866,7 +1111,6 @@ async function loadServizi() {
       const data = await readRange('SPESE RICORRENTI', 'B4:I11');
       serviziCache = data.values;
     }
-    // Row 0 = header: SERVIZIO|CADENZA|IMPORTO €|CATEGORIA|FORNITORE|STATO|VALUT.|NOTE
     const services = serviziCache.slice(1).filter(r => r[0] && String(r[0]).trim() && !String(r[0]).includes('▌'));
 
     let totMensile = 0;
@@ -930,7 +1174,6 @@ async function loadServizi() {
 function parseDate(v) {
   if (!v && v !== 0) return null;
   if (typeof v === 'number') {
-    // Excel serial date: days since Jan 0, 1900 (Unix epoch offset = 25569)
     return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
   }
   if (typeof v === 'string') return v.split('T')[0];
