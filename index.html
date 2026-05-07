@@ -834,7 +834,8 @@ let listaMese = { y: new Date().getFullYear(), m: new Date().getMonth() };
 
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
-  // MSAL v2: niente initialize(), abilita subito il pulsante
+  await msalInstance.initialize();
+
   const btnLogin = document.getElementById('btnLogin');
   if (btnLogin) btnLogin.disabled = false;
 
