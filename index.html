@@ -517,7 +517,7 @@ async function getTransazioni() {
     senso: r.values[0][0], tipologia: r.values[0][1],
     valore: parseFloat(r.values[0][2]) || 0, cadenza: r.values[0][3],
     descrizione: r.values[0][4], metodo: r.values[0][5],
-    mezzo: r.values[0][6], data: r.values[0][7], mese: r.values[0][8]
+    mezzo: r.values[0][6], data: parseDate(r.values[0][7]), mese: r.values[0][8]
   })).filter(r => r.valore !== 0);
   cacheTime = now;
   return cachedRows;
@@ -534,7 +534,7 @@ async function loadDashboard() {
     const { y, m } = dashMese;
     const pm = m === 0 ? 11 : m - 1, py = m === 0 ? y - 1 : y;
 
-    const thisMonth = rows.filter(r => { const d = new Date(r.data); return d.getFullYear()===y && d.getMonth()===m; });
+    const thisMonth = rows.filter(r => { return sameYM(r.data, y, m); });
     const prevMonth = rows.filter(r => { const d = new Date(r.data); return d.getFullYear()===py && d.getMonth()===pm; });
 
     const totUscite  = thisMonth.filter(r=>r.valore<0).reduce((s,r)=>s+r.valore,0);
@@ -604,8 +604,8 @@ async function renderLista() {
     const rows = await getTransazioni();
     const { y, m } = listaMese;
     const filtered = rows
-      .filter(r => { const d=new Date(r.data); return d.getFullYear()===y && d.getMonth()===m; })
-      .sort((a,b) => new Date(b.data) - new Date(a.data));
+      .filter(r => sameYM(r.data, y, m))
+      .sort((a,b) => String(b.data).localeCompare(String(a.data)));
     if (filtered.length === 0) {
       document.getElementById('listaContent').innerHTML = '<div class="empty">Nessuna transazione<br>per questo mese</div>';
       return;
@@ -799,36 +799,35 @@ async function loadCasa() {
       const data = await readRange('PANNELLO CASA', 'A29:O36');
       casaCache = data.values;
     }
-    // values[0] = titolo sezione, values[1] = header (VOCE|GEN...|TOTALE|MEDIA)
-    // values[2..6] = righe dati, values[7] = TOTALE COSTO CASA
-    const dataRows = casaCache.slice(2); // righe con i dati
+    // values[0]=titolo, values[1]=header, values[2..6]=dati, values[7]=TOTALE
     const now = new Date();
-    const mIdx = now.getMonth() + 1; // col 0=VOCE, 1=GEN...12=DIC, 13=TOT, 14=MEDIA
-
-    // Schede YTD
-    const ytdCards = dataRows.map(row => {
-      const name = String(row[0]||'').replace('🏠 ','').trim();
-      const ytd  = parseFloat(row[13]) || 0;
-      const avg  = parseFloat(row[14]) || 0;
-      return { name, ytd, avg };
-    });
-
-    const total = ytdCards.find(r => r.name.includes('TOTALE'));
-    const items = ytdCards.filter(r => !r.name.includes('TOTALE') && r.name);
+    const mIdx = now.getMonth() + 1; // col 1=GEN...12=DIC, 13=TOT, 14=MEDIA
 
     let html = '<div class="summary-cards">';
-    items.forEach(r => {
-      html += `<div class="card">
-        <div class="card-label">${r.name}</div>
-        <div class="card-value">${fmt(r.ytd)}</div>
-        <div class="card-sub">media ${fmt(r.avg)}/mese</div>
-      </div>`;
+    let totaleRow = null;
+
+    // Schede YTD (righe 2 in poi, saltando titolo e header)
+    casaCache.slice(2).forEach(row => {
+      const name = String(row[0]||'').replace('🏠 ','').trim();
+      if (!name) return;
+      const ytd = parseFloat(row[13]) || 0;
+      const avg = parseFloat(row[14]) || 0;
+      if (name.toUpperCase().includes('TOTALE')) {
+        totaleRow = { name: 'Totale casa YTD', ytd, avg, row };
+      } else {
+        html += `<div class="card">
+          <div class="card-label">${name}</div>
+          <div class="card-value">${fmt(ytd)}</div>
+          <div class="card-sub">media ${fmt(avg)}/mese</div>
+        </div>`;
+      }
     });
-    if (total) {
+
+    if (totaleRow) {
       html += `<div class="card full">
-        <div class="card-label">Totale casa YTD</div>
-        <div class="card-value negative">${fmt(total.ytd)}</div>
-        <div class="card-sub">media ${fmt(total.avg)}/mese</div>
+        <div class="card-label">${totaleRow.name}</div>
+        <div class="card-value negative">${fmt(totaleRow.ytd)}</div>
+        <div class="card-sub">media ${fmt(totaleRow.avg)}/mese</div>
       </div>`;
     }
     html += '</div>';
@@ -836,21 +835,17 @@ async function loadCasa() {
     // Dettaglio mese corrente
     html += `<div class="section-title">${MESI_IT[now.getMonth()]} ${now.getFullYear()}</div>`;
     html += '<div class="cat-item">';
-    items.forEach(r => {
-      const val = parseFloat(casaCache[2 + items.indexOf(r)][mIdx]) || 0;
+    casaCache.slice(2).forEach(row => {
+      const name = String(row[0]||'').replace('🏠 ','').trim();
+      if (!name) return;
+      const val = parseFloat(row[mIdx]) || 0;
       if (val === 0) return;
+      const isTotal = name.toUpperCase().includes('TOTALE');
       html += `<div class="casa-row">
-        <span class="casa-row-name">${r.name}</span>
-        <span class="casa-row-val">${fmt(val)}</span>
+        <span class="casa-row-name" ${isTotal?'style="color:var(--accent)"':''}>${name}</span>
+        <span class="casa-row-val ${isTotal?'total':''}">${fmt(val)}</span>
       </div>`;
     });
-    if (total) {
-      const totMese = parseFloat(casaCache[casaCache.length-1][mIdx]) || 0;
-      if (totMese > 0) html += `<div class="casa-row">
-        <span class="casa-row-name" style="color:var(--accent)">Totale mese</span>
-        <span class="casa-row-val total">${fmt(totMese)}</span>
-      </div>`;
-    }
     html += '</div>';
 
     document.getElementById('casaContent').innerHTML = html;
@@ -868,7 +863,7 @@ async function loadServizi() {
     '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     if (!serviziCache) {
-      const data = await readRange('SPESE RICORRENTI', 'B4:I15');
+      const data = await readRange('SPESE RICORRENTI', 'B4:I11');
       serviziCache = data.values;
     }
     // Row 0 = header: SERVIZIO|CADENZA|IMPORTO €|CATEGORIA|FORNITORE|STATO|VALUT.|NOTE
@@ -932,6 +927,22 @@ async function loadServizi() {
 }
 
 // ── UTILITY ─────────────────────────────────────────────────
+function parseDate(v) {
+  if (!v && v !== 0) return null;
+  if (typeof v === 'number') {
+    // Excel serial date: days since Jan 0, 1900 (Unix epoch offset = 25569)
+    return new Date((v - 25569) * 86400 * 1000).toISOString().split('T')[0];
+  }
+  if (typeof v === 'string') return v.split('T')[0];
+  return null;
+}
+
+function sameYM(dateStr, y, m) {
+  if (!dateStr) return false;
+  const parts = String(dateStr).split('-');
+  return parseInt(parts[0]) === y && parseInt(parts[1]) - 1 === m;
+}
+
 function fmt(n) {
   return new Intl.NumberFormat('it-IT', { minimumFractionDigits:2, maximumFractionDigits:2 }).format(n) + ' €';
 }
