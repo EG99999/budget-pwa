@@ -857,8 +857,13 @@ window.addEventListener('load', async () => {
 
 async function login() {
   try {
-    await msalInstance.loginRedirect({ scopes: SCOPES });
-  } catch(e) { showToast('Errore login: ' + e.message, 'error'); }
+    const resp = await msalInstance.loginPopup({ scopes: SCOPES });
+    accessToken = resp.accessToken;
+    msalInstance.setActiveAccount(resp.account);
+    checkSetup();
+  } catch(e) {
+    showToast('Errore login: ' + e.message, 'error');
+  }
 }
 
 async function getToken() {
