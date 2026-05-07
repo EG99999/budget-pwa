@@ -834,9 +834,18 @@ let listaMese = { y: new Date().getFullYear(), m: new Date().getMonth() };
 
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
-  await msalInstance.initialize();
-
   const btnLogin = document.getElementById('btnLogin');
+
+  try {
+    await msalInstance.initialize();
+  } catch(e) {
+    if (btnLogin) {
+      btnLogin.disabled = false;
+      btnLogin.textContent = 'Errore: ' + e.message;
+    }
+    return;
+  }
+
   if (btnLogin) btnLogin.disabled = false;
 
   // gestisce il ritorno dal redirect Microsoft
@@ -849,7 +858,7 @@ window.addEventListener('load', async () => {
       return;
     }
   } catch(e) {
-    showToast('Errore autenticazione: ' + e.message, 'error');
+    showAuthError('Errore autenticazione: ' + e.message);
   }
 
   // controlla se c'è già un account salvato
@@ -866,11 +875,27 @@ window.addEventListener('load', async () => {
 });
 
 async function login() {
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true;
+  btn.textContent = 'Connessione…';
   try {
     await msalInstance.loginRedirect({ scopes: SCOPES });
   } catch(e) {
-    showToast('Errore login: ' + e.message, 'error');
+    showAuthError('Errore login: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Accedi con Microsoft';
   }
+}
+
+function showAuthError(msg) {
+  let el = document.getElementById('authError');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'authError';
+    el.style.cssText = 'color:#e05a5a;font-size:13px;text-align:center;max-width:280px;line-height:1.5';
+    document.getElementById('authScreen').appendChild(el);
+  }
+  el.textContent = msg;
 }
 
 async function getToken() {
