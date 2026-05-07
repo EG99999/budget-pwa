@@ -664,7 +664,7 @@
   <div class="auth-logo">Budget Personale</div>
   <h1 class="auth-title">I tuoi<br><span>soldi</span>,<br>sempre con te.</h1>
   <p class="auth-subtitle">Accedi con il tuo account Microsoft per sincronizzare il tuo file Excel su OneDrive.</p>
-  <button class="btn-login" onclick="login()">Accedi con Microsoft</button>
+  <button class="btn-login" id="btnLogin" onclick="login()" disabled>Accedi con Microsoft</button>
 </div>
 
 <!-- SETUP (prima volta) -->
@@ -835,6 +835,10 @@ let listaMese = { y: new Date().getFullYear(), m: new Date().getMonth() };
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
   await msalInstance.initialize();
+
+  // abilita pulsante solo dopo init
+  const btnLogin = document.getElementById('btnLogin');
+  if (btnLogin) btnLogin.disabled = false;
 
   // gestisce redirect dopo login
   try {
