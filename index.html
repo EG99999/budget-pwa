@@ -384,7 +384,7 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     <div class="form-section">
       <span class="form-label">Importo</span>
       <div class="valore-display uscita placeholder" id="valoreDisplay" onclick="focusValore()">0,00</div>
-      <input type="number" id="valoreHidden" step="0.01" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px" inputmode="decimal" oninput="updateValoreDisplay()">
+      <input type="text" id="valoreHidden" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px" inputmode="decimal" oninput="sanitizeValore(this);updateValoreDisplay()">
     </div>
     <div class="form-section">
       <div class="form-row">
@@ -1073,11 +1073,27 @@ function setSenso(senso) {
   updateValoreDisplay();
 }
 function focusValore(){document.getElementById('valoreHidden').focus();}
+function sanitizeValore(inp){
+  let v=inp.value.replace(/[^0-9.,]/g,'');
+  const sep=v.search(/[.,]/);
+  if(sep!==-1) v=v.slice(0,sep+1)+v.slice(sep+1).replace(/[.,]/g,'');
+  inp.value=v;
+}
+function parseValore(raw){return parseFloat((raw||'').replace(',','.'))||0;}
 function updateValoreDisplay(){
   const inp=document.getElementById('valoreHidden'), el=document.getElementById('valoreDisplay');
-  const v=parseFloat(inp.value);
-  if (!inp.value||isNaN(v)||v===0){el.textContent='0,00';el.className='valore-display placeholder';}
-  else{el.textContent=fmt(Math.abs(v));el.className='valore-display '+currentSenso.toLowerCase();}
+  const raw=inp.value.trim();
+  const v=parseValore(raw);
+  if(!raw||v===0){el.textContent='0,00';el.className='valore-display placeholder';return;}
+  el.className='valore-display '+currentSenso.toLowerCase();
+  const normIdx=raw.search(/[.,]/);
+  if(normIdx!==-1){
+    const intPart=Math.abs(parseInt(raw.slice(0,normIdx),10))||0;
+    const decPart=raw.slice(normIdx+1);
+    el.textContent=new Intl.NumberFormat('it-IT').format(intPart)+','+decPart;
+  } else {
+    el.textContent=fmt(Math.abs(v));
+  }
 }
 function resetForm(){
   document.getElementById('valoreHidden').value='';
@@ -1089,7 +1105,7 @@ function resetForm(){
 }
 
 async function salvaTransazione() {
-  const vRaw=parseFloat(document.getElementById('valoreHidden').value);
+  const vRaw=parseValore(document.getElementById('valoreHidden').value);
   const tip=document.getElementById('fTipologia').value;
   const data=document.getElementById('fData').value;
   if (!vRaw||isNaN(vRaw)){showToast('Inserisci un importo','error');return;}
