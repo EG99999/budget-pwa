@@ -221,6 +221,32 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .recente-val.pos { color:var(--green); }
 .recente-desc { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
+/* ── FILTER BAR ────────────────────────────────────────────── */
+.lista-period { display:flex; gap:6px; margin-bottom:12px; }
+.period-btn { flex:1; padding:8px 4px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--text2); font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; transition:all .15s; -webkit-tap-highlight-color:transparent; }
+.period-btn.active { background:var(--accent); border-color:var(--accent); color:var(--bg); }
+.filter-bar { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:12px; align-items:center; }
+.filter-bar::-webkit-scrollbar { display:none; }
+.filter-chip { flex:0 0 auto; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 14px; font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text2); cursor:pointer; transition:all .15s; -webkit-tap-highlight-color:transparent; white-space:nowrap; }
+.filter-chip.active { background:var(--accent); border-color:var(--accent); color:var(--bg); }
+.filter-sel { flex:0 0 auto; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 12px; font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:var(--text2); cursor:pointer; outline:none; max-width:140px; }
+.btn-richiama { width:100%; display:flex; justify-content:space-between; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; color:var(--text2); font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; margin-bottom:16px; -webkit-tap-highlight-color:transparent; transition:border-color .15s; }
+.btn-richiama:active { border-color:var(--accent); color:var(--accent); }
+/* ── RICHIAMA OVERLAY ──────────────────────────────────────── */
+#richiamaOverlay { position:fixed; inset:0; z-index:200; background:var(--bg); display:none; flex-direction:column; }
+.richiama-ovl-header { padding:14px 16px; display:flex; gap:10px; align-items:center; border-bottom:1px solid var(--border); flex-shrink:0; }
+.richiama-search { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:10px 16px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
+.richiama-search:focus { border-color:var(--accent); }
+.richiama-close { background:none; border:none; color:var(--text2); font-size:22px; cursor:pointer; padding:4px 8px; flex-shrink:0; line-height:1; -webkit-tap-highlight-color:transparent; }
+.richiama-ovl-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.richiama-item { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--border); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.richiama-item:active { background:var(--surface); }
+.richiama-meta { flex:1; min-width:0; margin-right:12px; }
+.richiama-cat { font-family:var(--mono); font-size:9px; color:var(--text2); letter-spacing:.1em; text-transform:uppercase; margin-bottom:3px; }
+.richiama-desc-txt { font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.richiama-date-txt { font-family:var(--mono); font-size:10px; color:var(--text2); margin-top:2px; }
+.richiama-amt { font-family:var(--mono); font-size:14px; flex-shrink:0; }
+
 /* ── TRANSACTIONS ─────────────────────────────────────────── */
 .tx-list { display:flex; flex-direction:column; gap:8px; }
 .tx-item { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:13px 14px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:border-color .15s; }
@@ -346,8 +372,10 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
       Modifica voce esistente
     </div>
     <div id="recentiSection">
-      <div class="recenti-header">Richiama voce recente</div>
-      <div class="recenti-scroll" id="recentiList"><div style="color:var(--text2);font-size:12px;font-family:var(--mono)">Caricamento…</div></div>
+      <button class="btn-richiama" onclick="apriRichiama()">
+        <span>Richiama voce recente</span>
+        <span style="font-size:18px;line-height:1">&#8250;</span>
+      </button>
     </div>
     <div class="senso-toggle">
       <button class="senso-btn active-uscita" id="btnUscita"  onclick="setSenso('USCITA')">Uscita</button>
@@ -424,10 +452,30 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
   </div>
 
   <div class="page" id="pageLista">
-    <div class="month-selector">
+    <div class="lista-period">
+      <button class="period-btn active" id="pBtnMese"  onclick="setPeriodo('mese')">Mese</button>
+      <button class="period-btn"        id="pBtnAnno"  onclick="setPeriodo('anno')">Anno</button>
+      <button class="period-btn"        id="pBtnTutto" onclick="setPeriodo('tutto')">Tutto</button>
+    </div>
+    <div class="month-selector" id="listaNaveRow">
       <button class="month-arrow" onclick="cambiaListaMese(-1)">&#8249;</button>
       <div class="month-label" id="listaMeseLabel"></div>
       <button class="month-arrow" onclick="cambiaListaMese(1)">&#8250;</button>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-chip active" id="fcSensoTutti"   onclick="setFSenso('')">Tutti</button>
+      <button class="filter-chip"        id="fcSensoUscite"  onclick="setFSenso('USCITA')">Uscite</button>
+      <button class="filter-chip"        id="fcSensoEntrate" onclick="setFSenso('ENTRATA')">Entrate</button>
+      <select class="filter-sel" id="fcCategoria" onchange="setFCat(this.value)">
+        <option value="">Tutte le categorie</option>
+      </select>
+      <select class="filter-sel" id="fcSort" onchange="setFSort(this.value)">
+        <option value="data-desc">Data ↓</option>
+        <option value="data-asc">Data ↑</option>
+        <option value="importo-desc">Importo ↓</option>
+        <option value="importo-asc">Importo ↑</option>
+        <option value="cat-asc">Categoria A→Z</option>
+      </select>
     </div>
     <div id="listaContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
   </div>
@@ -573,6 +621,10 @@ let editingIndex = null;
 let currentPage  = 'cruscotto';
 let dashMese     = { y: new Date().getFullYear(), m: new Date().getMonth() };
 let listaMese    = { y: new Date().getFullYear(), m: new Date().getMonth() };
+let listaPeriodo = 'mese';
+let listaFSenso  = '';
+let listaFCat    = '';
+let listaFSort   = 'data-desc';
 let budgetMese   = { y: new Date().getFullYear(), m: new Date().getMonth() };
 
 // ── INIT ────────────────────────────────────────────────────
@@ -755,21 +807,57 @@ async function getTransazioni() {
 function invalidateCache() { cachedRows=null; cacheTime=0; _gData=null; _destroyGChart('trend'); _destroyGChart('categorie'); _destroyGChart('budget'); }
 
 // ── RECENTI ───────────────────────────────────────────────────
-async function loadRecenti() {
-  const container = document.getElementById('recentiList');
-  if (!container) return;
+function loadRecenti() { /* sostituito da overlay apriRichiama */ }
+
+// ── RICHIAMA OVERLAY ──────────────────────────────────────────
+let _richiamaRows = [];
+
+async function apriRichiama() {
+  const overlay = document.getElementById('richiamaOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('richiamaSearch').value = '';
+  document.getElementById('richiamaList').innerHTML = '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     const rows = await getTransazioni();
-    const recent = [...rows].sort((a,b)=>String(b.data).localeCompare(String(a.data))).slice(0,12);
-    if (recent.length===0) { document.getElementById('recentiSection').style.display='none'; return; }
-    document.getElementById('recentiSection').style.display = 'block';
-    container.innerHTML = recent.map(r=>`
-      <div class="recente-item" onclick='richiamaVoce(${JSON.stringify(r)})'>
-        <div class="recente-cat">${r.tipologia||'—'}</div>
-        <div class="recente-val ${r.valore<0?'neg':'pos'}">${fmt(Math.abs(r.valore))}</div>
-        <div class="recente-desc">${r.descrizione||r.cadenza||'—'}</div>
-      </div>`).join('');
-  } catch(e) { document.getElementById('recentiSection').style.display='none'; }
+    _richiamaRows = [...rows].sort((a,b)=>String(b.data).localeCompare(String(a.data)));
+    renderRichiamaList('');
+    document.getElementById('richiamaSearch').focus();
+  } catch(e) {
+    document.getElementById('richiamaList').innerHTML = '<div class="empty">Errore caricamento</div>';
+  }
+}
+
+function chiudiRichiama() {
+  document.getElementById('richiamaOverlay').style.display = 'none';
+}
+
+function filterRichiama(q) { renderRichiamaList(q); }
+
+function renderRichiamaList(q) {
+  const lq = q.toLowerCase();
+  const visible = lq
+    ? _richiamaRows.filter(r =>
+        (r.tipologia||'').toLowerCase().includes(lq) ||
+        (r.descrizione||'').toLowerCase().includes(lq))
+    : _richiamaRows;
+  if (!visible.length) {
+    document.getElementById('richiamaList').innerHTML = '<div class="empty">Nessun risultato</div>';
+    return;
+  }
+  document.getElementById('richiamaList').innerHTML = visible.slice(0,80).map(r=>`
+    <div class="richiama-item" onclick='selezionaRichiama(${JSON.stringify(r)})'>
+      <div class="richiama-meta">
+        <div class="richiama-cat">${r.tipologia||'—'}</div>
+        <div class="richiama-desc-txt">${r.descrizione||r.cadenza||'—'}</div>
+        <div class="richiama-date-txt">${formatDate(r.data)}</div>
+      </div>
+      <div class="richiama-amt ${r.valore<0?'uscita':'entrata'}">${r.valore<0?'':'+'}${fmt(Math.abs(r.valore))}</div>
+    </div>`).join('');
+}
+
+function selezionaRichiama(r) {
+  chiudiRichiama();
+  richiamaVoce(r);
 }
 
 function richiamaVoce(r) {
@@ -838,13 +926,52 @@ function cambiadashmese(dir){dashMese.m+=dir;if(dashMese.m>11){dashMese.m=0;dash
 
 // ── LISTA ─────────────────────────────────────────────────────
 async function renderLista() {
-  document.getElementById('listaMeseLabel').textContent = MESI_IT[listaMese.m].slice(0,3)+' '+listaMese.y;
+  const naveRow = document.getElementById('listaNaveRow');
+  const lbl     = document.getElementById('listaMeseLabel');
+  if (naveRow) naveRow.style.display = listaPeriodo==='tutto' ? 'none' : 'flex';
+  if (lbl) lbl.textContent = listaPeriodo==='mese'
+    ? MESI_IT[listaMese.m].slice(0,3)+' '+listaMese.y
+    : String(listaMese.y);
+
   document.getElementById('listaContent').innerHTML = '<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     const rows = await getTransazioni();
-    const {y,m} = listaMese;
-    const filtered = rows.filter(r=>sameYM(r.data,y,m)).sort((a,b)=>String(b.data).localeCompare(String(a.data)));
-    if (filtered.length===0) { document.getElementById('listaContent').innerHTML='<div class="empty">Nessuna transazione<br>per questo mese</div>'; return; }
+
+    // Popola select categorie dai dati reali
+    const catSel = document.getElementById('fcCategoria');
+    if (catSel) {
+      const cats = [...new Set(rows.map(r=>r.tipologia).filter(Boolean))].sort();
+      catSel.innerHTML = '<option value="">Tutte le categorie</option>' +
+        cats.map(c=>`<option value="${c}"${c===listaFCat?' selected':''}>${c}</option>`).join('');
+    }
+
+    // Filtro periodo
+    let filtered = rows.filter(r=>{
+      if (!r.data) return false;
+      if (listaPeriodo==='mese') return sameYM(r.data,listaMese.y,listaMese.m);
+      if (listaPeriodo==='anno') return String(r.data).startsWith(String(listaMese.y));
+      return true;
+    });
+
+    // Filtro senso e categoria
+    if (listaFSenso) filtered = filtered.filter(r=>(r.senso||'').toUpperCase()===listaFSenso);
+    if (listaFCat)   filtered = filtered.filter(r=>r.tipologia===listaFCat);
+
+    // Ordinamento
+    filtered.sort((a,b)=>{
+      switch(listaFSort){
+        case 'data-asc':     return String(a.data).localeCompare(String(b.data));
+        case 'importo-desc': return Math.abs(b.valore)-Math.abs(a.valore);
+        case 'importo-asc':  return Math.abs(a.valore)-Math.abs(b.valore);
+        case 'cat-asc':      return (a.tipologia||'').localeCompare(b.tipologia||'');
+        default:             return String(b.data).localeCompare(String(a.data));
+      }
+    });
+
+    if (filtered.length===0) {
+      document.getElementById('listaContent').innerHTML='<div class="empty">Nessuna transazione<br>con i filtri selezionati</div>';
+      return;
+    }
     document.getElementById('listaContent').innerHTML=`<div class="tx-list">
       ${filtered.map(r=>`
         <div class="tx-item" onclick="toggleTxActions(this)">
@@ -858,8 +985,7 @@ async function renderLista() {
             <div class="tx-amount ${r.valore<0?'uscita':'entrata'}">${r.valore<0?'':'+'}${fmt(Math.abs(r.valore))}</div>
           </div>
           <div class="tx-actions">
-            <button class="btn-tx edit" onclick="event.stopPropagation();preparaEdit(${JSON.stringify(r)})">&#9998; Modifica</button>
-            <button class="btn-tx dup"  onclick="event.stopPropagation();duplicaVoce(${JSON.stringify(r)})">&#10010; Duplica</button>
+            <button class="btn-tx edit" onclick='event.stopPropagation();preparaEdit(${JSON.stringify(r)})'>&#9998; Modifica</button>
             <button class="btn-tx del"  onclick="event.stopPropagation();eliminaTransazione(this,${r._index})">&#128465; Elimina</button>
           </div>
         </div>`).join('')}
@@ -873,7 +999,28 @@ function toggleTxActions(el) {
   document.querySelectorAll('.tx-actions.show').forEach(a=>{a.classList.remove('show');a.closest('.tx-item').classList.remove('expanded');});
   if (!isOpen){actions.classList.add('show');el.classList.add('expanded');}
 }
-function cambiaListaMese(dir){listaMese.m+=dir;if(listaMese.m>11){listaMese.m=0;listaMese.y++;}if(listaMese.m<0){listaMese.m=11;listaMese.y--;}renderLista();}
+
+function cambiaListaMese(dir) {
+  if (listaPeriodo==='mese'){listaMese.m+=dir;if(listaMese.m>11){listaMese.m=0;listaMese.y++;}if(listaMese.m<0){listaMese.m=11;listaMese.y--;}}
+  else {listaMese.y+=dir;}
+  renderLista();
+}
+
+function setPeriodo(p) {
+  listaPeriodo=p;
+  ['Mese','Anno','Tutto'].forEach(n=>document.getElementById('pBtn'+n).classList.toggle('active',p===n.toLowerCase()));
+  renderLista();
+}
+
+function setFSenso(s) {
+  listaFSenso=s;
+  document.getElementById('fcSensoTutti').classList.toggle('active',s==='');
+  document.getElementById('fcSensoUscite').classList.toggle('active',s==='USCITA');
+  document.getElementById('fcSensoEntrate').classList.toggle('active',s==='ENTRATA');
+  renderLista();
+}
+function setFCat(c)  { listaFCat=c;  renderLista(); }
+function setFSort(s) { listaFSort=s; renderLista(); }
 
 // ── ELIMINA ───────────────────────────────────────────────────
 async function eliminaTransazione(btn, rowIndex) {
@@ -909,7 +1056,6 @@ function preparaEdit(r) {
   document.getElementById('fData').value = r.data||new Date().toISOString().split('T')[0];
   showPage('add'); document.getElementById('pageAdd').scrollTo(0,0);
 }
-function duplicaVoce(r) { richiamaVoce(r); showPage('add'); }
 function annullaEdit() {
   editingIndex=null;
   document.getElementById('editBanner').style.display    = 'none';
@@ -1407,5 +1553,15 @@ function showToast(msg,type=''){
   t._timer=setTimeout(()=>t.className='toast',2800);
 }
 </script>
+<!-- RICHIAMA OVERLAY -->
+<div id="richiamaOverlay">
+  <div class="richiama-ovl-header">
+    <input type="search" class="richiama-search" id="richiamaSearch"
+           placeholder="Cerca categoria o descrizione…"
+           oninput="filterRichiama(this.value)">
+    <button class="richiama-close" onclick="chiudiRichiama()">&#10005;</button>
+  </div>
+  <div class="richiama-ovl-list" id="richiamaList"></div>
+</div>
 </body>
 </html>
