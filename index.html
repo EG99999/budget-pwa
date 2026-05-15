@@ -353,6 +353,10 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .btn-coab-pdf:active { opacity:.8; }
 .btn-coab { width:100%; background:transparent; border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--text2); cursor:pointer; margin-bottom:16px; transition:border-color .15s, color .15s; }
 .btn-coab:active { border-color:var(--accent); color:var(--accent); }
+.btn-coab-unlock { width:100%; background:transparent; border:1px solid rgba(200,169,126,.35); border-radius:var(--radius); padding:12px; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); cursor:pointer; margin-bottom:12px; transition:background .15s; }
+.btn-coab-unlock:active { background:rgba(200,169,126,.08); }
+.coab-lock-banner { display:flex; align-items:center; gap:10px; background:rgba(138,133,128,.07); border:1px solid var(--border); border-radius:10px; padding:11px 14px; margin-bottom:14px; font-family:var(--mono); font-size:11px; color:var(--text2); letter-spacing:.04em; }
+.coab-incassato { display:flex; align-items:center; justify-content:center; gap:8px; padding:13px; border-radius:var(--radius); background:rgba(90,170,122,.1); border:1px solid rgba(90,170,122,.25); font-family:var(--mono); font-size:12px; color:var(--green); letter-spacing:.06em; margin-bottom:16px; }
 </style>
 </head>
 <body>
@@ -1650,15 +1654,23 @@ function showToast(msg,type=''){
 }
 
 // ── COABITAZIONE ──────────────────────────────────────────────
+let _coabUnlocked = false;
+
 function _coabKey() { return `coab_${coabMese.y}_${coabMese.m}`; }
 function _coabGetData() { const s=localStorage.getItem(_coabKey()); return s?JSON.parse(s):{stipAurora:0,excluded:[]}; }
 function _coabSetData(d) { localStorage.setItem(_coabKey(),JSON.stringify(d)); }
+function _coabIsPast() {
+  const now=new Date();
+  return coabMese.y<now.getFullYear()||(coabMese.y===now.getFullYear()&&coabMese.m<now.getMonth());
+}
 
 async function loadCoabitazione() {
   document.getElementById('coabContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     const rows=await getTransazioni();
     const {y,m}=coabMese;
+    const locked=_coabIsPast()&&!_coabUnlocked;
+
     const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
     const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
     const saved=_coabGetData();
@@ -1671,6 +1683,48 @@ async function loadCoabitazione() {
     const totSpese=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
     const quotaElia=totSpese*pctElia;
     const quotaAurora=totSpese*pctAurora;
+    const giaIncassato=rows.some(r=>sameYM(r.data,y,m)&&r.valore>0&&(r.descrizione||'').toLowerCase().includes('aurora carminati'));
+
+    const lockBanner = locked ? `
+      <div class="coab-lock-banner">
+        <span style="font-size:16px">&#128274;</span>
+        <span>Mese precedente — sola lettura</span>
+        <button class="btn-coab-unlock" style="width:auto;margin:0;padding:6px 14px;font-size:10px" onclick="sbloccoCoab()">Sblocca</button>
+      </div>` : '';
+
+    const stipAuroraField = locked
+      ? `<div style="text-align:right">
+           <div class="coab-val">${stipAurora>0?fmt(stipAurora):'<span style="color:var(--text2)">non inserito</span>'}</div>
+           <div class="coab-pct">${(pctAurora*100).toFixed(1)}%</div>
+         </div>`
+      : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+           <input class="coab-input" type="number" min="0" step="0.01"
+                  value="${stipAurora||''}" placeholder="0,00"
+                  onchange="salvaStipAurora(this.value)">
+           <div class="coab-pct">${(pctAurora*100).toFixed(1)}%</div>
+         </div>`;
+
+    const itemHint = locked
+      ? ''
+      : `<div style="font-size:11px;color:var(--text2);margin-bottom:12px">Tocca per includere/escludere dal calcolo</div>`;
+
+    const itemList = uscite.length===0
+      ? '<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
+      : uscite.map(r=>`
+          <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}"
+               ${locked?'':'onclick="toggleCoabItem('+r._index+')"'}
+               style="${locked?'cursor:default':''}">
+            <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
+            <div class="coab-item-info">
+              <div class="coab-item-cat">${r.tipologia||'—'}</div>
+              <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
+            </div>
+            <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
+          </div>`).join('');
+
+    const incassoBtn = giaIncassato
+      ? `<div class="coab-incassato">&#9989; Incasso già registrato</div>`
+      : `<button class="btn-coab" onclick="registraCoabIncasso(${quotaAurora.toFixed(2)})">+ Registra incasso Aurora</button>`;
 
     document.getElementById('coabContent').innerHTML=`
       <div class="month-selector" style="margin-bottom:16px">
@@ -1678,41 +1732,27 @@ async function loadCoabitazione() {
         <div class="month-label">${MESI_IT[m]} ${y}</div>
         <button class="month-arrow" onclick="cambiaCoabMese(1)">&#8250;</button>
       </div>
+      ${lockBanner}
 
       <div class="coab-section">
         <div class="coab-title">Redditi</div>
         <div class="coab-row">
           <div class="coab-lbl">Stipendio Elia<span class="coab-sublbl">da transazioni</span></div>
           <div style="text-align:right">
-            <div class="coab-val">${stipElia>0?fmt(stipElia):'—'}</div>
+            <div class="coab-val">${stipElia>0?fmt(stipElia):'<span style="color:var(--text2)">—</span>'}</div>
             <div class="coab-pct">${(pctElia*100).toFixed(1)}%</div>
           </div>
         </div>
         <div class="coab-row">
           <div class="coab-lbl">Stipendio Aurora<span class="coab-sublbl">inserito manualmente</span></div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-            <input class="coab-input" type="number" min="0" step="0.01"
-                   value="${stipAurora||''}" placeholder="0,00"
-                   onchange="salvaStipAurora(this.value)">
-            <div class="coab-pct">${(pctAurora*100).toFixed(1)}%</div>
-          </div>
+          ${stipAuroraField}
         </div>
       </div>
 
       <div class="coab-section">
         <div class="coab-title">Spese comuni — ${MESI_IT[m]}</div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Tocca per includere/escludere dal calcolo</div>
-        ${uscite.length===0
-          ? '<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
-          : uscite.map(r=>`
-            <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}" onclick="toggleCoabItem(${r._index})">
-              <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
-              <div class="coab-item-info">
-                <div class="coab-item-cat">${r.tipologia||'—'}</div>
-                <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
-              </div>
-              <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
-            </div>`).join('')}
+        ${itemHint}
+        ${itemList}
         <div class="coab-subtot">
           <span>Totale selezionato</span>
           <span>${fmt(totSpese)}</span>
@@ -1737,7 +1777,7 @@ async function loadCoabitazione() {
       </div>
 
       <button class="btn-coab-pdf" onclick="generaCoabPDF()">&#128438; Genera PDF</button>
-      <button class="btn-coab" onclick="registraCoabIncasso(${quotaAurora.toFixed(2)})">+ Registra incasso Aurora</button>
+      ${incassoBtn}
     `;
   } catch(e) {
     document.getElementById('coabContent').innerHTML=`<div class="empty">Errore: ${e.message}</div>`;
@@ -1745,11 +1785,14 @@ async function loadCoabitazione() {
 }
 
 function cambiaCoabMese(dir) {
+  _coabUnlocked=false;
   coabMese.m+=dir;
   if(coabMese.m>11){coabMese.m=0;coabMese.y++;}
   if(coabMese.m<0) {coabMese.m=11;coabMese.y--;}
   loadCoabitazione();
 }
+
+function sbloccoCoab() { _coabUnlocked=true; loadCoabitazione(); }
 
 function salvaStipAurora(val) {
   const d=_coabGetData();
