@@ -764,6 +764,7 @@ function startApp() {
   document.getElementById('setupScreen').style.display = 'none';
   document.getElementById('app').style.display         = 'flex';
   document.getElementById('fData').value = new Date().toISOString().split('T')[0];
+  initCoabStorico();
   updateHeaderCenter('cruscotto');
   loadCruscotto();
 }
@@ -1670,6 +1671,34 @@ let _coabUnlocked = false;
 let _coabAddingVoce = false;
 const _TIPO_LBL = { divisa:'Divisa', elia:'Solo Elia', aurora:'Solo Aurora', credito_elia:'Credito Elia', credito_aurora:'Credito Aurora' };
 
+const _COAB_STORICO = {
+  '2025_9':  { stipElia:2150, stipAurora:1600, extraVoci:[{id:1,desc:'Spese comuni ottobre',importo:842.80,tipo:'divisa'},{id:2,desc:'STI Liguria - solo Aurora',importo:101.09,tipo:'aurora'}] },
+  '2025_10': { stipElia:2130, stipAurora:1605, extraVoci:[{id:1,desc:'Spese comuni novembre',importo:839.10,tipo:'divisa'},{id:2,desc:'Caldaia',importo:110,tipo:'divisa'}] },
+  '2025_11': { stipElia:2163, stipAurora:1700, extraVoci:[{id:1,desc:'Spese comuni dicembre',importo:862.10,tipo:'divisa'}] },
+  '2026_0':  { stipElia:2814, stipAurora:1680, extraVoci:[{id:1,desc:'Spese comuni gennaio',importo:919.40,tipo:'divisa'}] },
+  '2026_1':  { stipElia:2120, stipAurora:1600, extraVoci:[{id:1,desc:'Spese comuni febbraio',importo:952.20,tipo:'divisa'}] },
+  '2026_2':  { stipElia:2120, stipAurora:1600, extraVoci:[{id:1,desc:'Spese comuni marzo',importo:973.20,tipo:'divisa'}] },
+  '2026_3':  { stipElia:2120, stipAurora:1746, extraVoci:[{id:1,desc:'Spese comuni aprile',importo:950.55,tipo:'divisa'},{id:2,desc:'TARI',importo:33,tipo:'divisa'},{id:3,desc:'UnipolMove',importo:47,tipo:'divisa'}] },
+  '2026_4':  { stipElia:2164, stipAurora:1730, extraVoci:[{id:1,desc:'Spese comuni maggio',importo:921.70,tipo:'divisa'},{id:2,desc:'Credito Aurora',importo:148.08,tipo:'credito_aurora'}] },
+};
+
+function initCoabStorico() {
+  Object.entries(_COAB_STORICO).forEach(([key, data]) => {
+    const lsKey = 'coab_' + key;
+    if (!localStorage.getItem(lsKey)) {
+      localStorage.setItem(lsKey, JSON.stringify({
+        stipAurora: data.stipAurora,
+        stipEliaOverride: data.stipElia,
+        excluded: [],
+        extraVoci: data.extraVoci,
+        consegnato: true,
+        excludeAllTx: true,
+        fromPDF: true
+      }));
+    }
+  });
+}
+
 function _coabKey() { return `coab_${coabMese.y}_${coabMese.m}`; }
 function _coabGetData() {
   const s=localStorage.getItem(_coabKey());
@@ -1691,16 +1720,18 @@ async function loadCoabitazione() {
     const saved=_coabGetData();
     const locked=_coabIsLocked(saved);
 
-    const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
+    const stipEliaFromTx=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
+    const stipElia=saved.stipEliaOverride!=null?saved.stipEliaOverride:stipEliaFromTx;
     const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
     const giaIncassato=rows.some(r=>sameYM(r.data,y,m)&&r.valore>0&&(r.descrizione||'').toLowerCase().includes('aurora carminati'));
     const stipAurora=saved.stipAurora||0;
     const excluded=new Set(saved.excluded||[]);
     const extraVoci=saved.extraVoci||[];
+    const excludeAllTx=saved.excludeAllTx||false;
     const totRedditi=stipElia+stipAurora;
     const pctElia=totRedditi>0?stipElia/totRedditi:0.5;
     const pctAurora=1-pctElia;
-    const totTx=uscite.filter(r=>!excluded.has(r._index)).reduce((s,r)=>s+Math.abs(r.valore),0);
+    const totTx=excludeAllTx?0:uscite.filter(r=>!excluded.has(r._index)).reduce((s,r)=>s+Math.abs(r.valore),0);
     const totDivise=extraVoci.filter(v=>v.tipo==='divisa').reduce((s,v)=>s+v.importo,0);
     const totCondiviso=totTx+totDivise;
     const extraElia=extraVoci.filter(v=>v.tipo==='elia').reduce((s,v)=>s+v.importo,0);
@@ -1730,19 +1761,21 @@ async function loadCoabitazione() {
            <div class="coab-pct">${(pctAurora*100).toFixed(1)}%</div>
          </div>`;
 
-    const itemList=uscite.length===0
-      ?'<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
-      :uscite.map(r=>`
-        <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}"
-             ${locked?'':`onclick="toggleCoabItem(${r._index})"`}
-             style="${locked?'cursor:default':''}">
-          <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
-          <div class="coab-item-info">
-            <div class="coab-item-cat">${r.tipologia||'—'}</div>
-            <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
-          </div>
-          <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
-        </div>`).join('');
+    const itemList=excludeAllTx
+      ?`<div style="font-size:12px;color:var(--text2);padding:8px 0;font-family:var(--mono)">&#128196; Dati storici da PDF — transazioni non disponibili</div>`
+      :uscite.length===0
+        ?'<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
+        :uscite.map(r=>`
+          <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}"
+               ${locked?'':`onclick="toggleCoabItem(${r._index})"`}
+               style="${locked?'cursor:default':''}">
+            <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
+            <div class="coab-item-info">
+              <div class="coab-item-cat">${r.tipologia||'—'}</div>
+              <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
+            </div>
+            <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
+          </div>`).join('');
 
     const extraList=extraVoci.map(v=>`
       <div class="coab-item" style="cursor:default">
@@ -1777,9 +1810,16 @@ async function loadCoabitazione() {
           </div>`
         :`<button class="btn-coab" style="margin-top:10px;margin-bottom:0" onclick="apriAggiungiVoce()">+ Aggiungi voce</button>`);
 
-    const incassoBtn=giaIncassato
-      ?`<div class="coab-incassato">&#9989; Incasso già registrato</div>`
-      :`<button class="btn-coab" onclick="registraCoabIncasso(${bonificoAurora.toFixed(2)})">+ Registra incasso Aurora</button>`;
+    const incassoBtn=saved.fromPDF
+      ?`<div class="coab-incassato">&#9989; Incasso registrato (storico)</div>`
+      :giaIncassato
+        ?`<div class="coab-incassato">&#9989; Incasso già registrato</div>`
+        :`<button class="btn-coab" onclick="registraCoabIncasso(${bonificoAurora.toFixed(2)})">+ Registra incasso Aurora</button>`;
+
+    const pdfBtns=saved.fromPDF
+      ?`<button class="btn-coab-pdf" onclick="generaCoabPDF()">&#128438; Rigenera PDF</button>
+        <button class="btn-coab" style="margin-bottom:10px" onclick="apriPDFStorico()">&#128196; Apri PDF originale</button>`
+      :`<button class="btn-coab-pdf" onclick="generaCoabPDF()">&#128438; Genera PDF</button>`;
 
     const consegnaBtn=(!locked&&!_coabIsPast()&&!saved.consegnato)
       ?`<button class="btn-coab" onclick="marcaConsegnato()">&#128228; Ho già consegnato</button>`
@@ -1845,7 +1885,7 @@ async function loadCoabitazione() {
         <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:6px;text-align:right">IBAN: IT12Z0301503200000006395124 · Gatti Elia</div>
       </div>
 
-      <button class="btn-coab-pdf" onclick="generaCoabPDF()">&#128438; Genera PDF</button>
+      ${pdfBtns}
       ${incassoBtn}
       ${consegnaBtn}
     `;
@@ -1896,15 +1936,17 @@ async function generaCoabPDF() {
   const {y,m}=coabMese;
   const rows=await getTransazioni();
   const saved=_coabGetData();
-  const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
+  const stipEliaFromTx=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
+  const stipElia=saved.stipEliaOverride!=null?saved.stipEliaOverride:stipEliaFromTx;
   const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
   const stipAurora=saved.stipAurora||0;
   const excluded=new Set(saved.excluded||[]);
   const extraVoci=saved.extraVoci||[];
+  const excludeAllTx=saved.excludeAllTx||false;
   const totRedditi=stipElia+stipAurora;
   const pctElia=totRedditi>0?stipElia/totRedditi:0.5;
   const pctAurora=1-pctElia;
-  const selected=uscite.filter(r=>!excluded.has(r._index));
+  const selected=excludeAllTx?[]:uscite.filter(r=>!excluded.has(r._index));
   const totTx=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
   const totDivise=extraVoci.filter(v=>v.tipo==='divisa').reduce((s,v)=>s+v.importo,0);
   const totCondiviso=totTx+totDivise;
@@ -1919,6 +1961,11 @@ async function generaCoabPDF() {
   const extraRows=extraVoci.length?`
 <h2>Voci aggiuntive</h2>
 ${extraVoci.map(v=>`<div class="row"><div><div>${_TIPO_LBL[v.tipo]||v.tipo}</div><div class="desc">${v.desc||''}</div></div><span class="mono" style="${v.tipo.includes('credito')?'color:#b04040':''}">${v.tipo.includes('credito')?'−':''}${fmt(v.importo)}</span></div>`).join('')}`:'';
+
+  const txSection=(!excludeAllTx||selected.length>0)?`
+<h2>Spese comuni da transazioni</h2>
+${selected.map(r=>`<div class="row"><div><div>${r.tipologia||'—'}</div><div class="desc">${r.descrizione||r.cadenza||''} &nbsp; ${formatDate(r.data)}</div></div><span class="mono">${fmt(Math.abs(r.valore))}</span></div>`).join('')}
+<div class="row total"><span>Totale da transazioni</span><span class="mono">${fmt(totTx)}</span></div>`:'';
 
   const pdfWin=window.open('','_blank');
   pdfWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -1945,10 +1992,7 @@ ${extraVoci.map(v=>`<div class="row"><div><div>${_TIPO_LBL[v.tipo]||v.tipo}</div
 <div class="row total"><span>Totale redditi</span><span class="mono">${fmt(stipElia+stipAurora)}</span></div>
 <div class="row"><span>% Elia</span><span class="mono">${(pctElia*100).toFixed(1)}%</span></div>
 <div class="row"><span>% Aurora</span><span class="mono">${(pctAurora*100).toFixed(1)}%</span></div>
-
-<h2>Spese comuni da transazioni</h2>
-${selected.map(r=>`<div class="row"><div><div>${r.tipologia||'—'}</div><div class="desc">${r.descrizione||r.cadenza||''} &nbsp; ${formatDate(r.data)}</div></div><span class="mono">${fmt(Math.abs(r.valore))}</span></div>`).join('')}
-<div class="row total"><span>Totale da transazioni</span><span class="mono">${fmt(totTx)}</span></div>
+${txSection}
 ${extraRows}
 <div class="row total"><span>Totale condiviso</span><span class="mono">${fmt(totCondiviso)}</span></div>
 
@@ -1978,6 +2022,23 @@ async function registraCoabIncasso(importo) {
     showToast('Incasso registrato','success');
   } catch(e) {
     showToast('Errore: '+e.message,'error');
+  }
+}
+
+async function apriPDFStorico() {
+  const {y,m}=coabMese;
+  const pad=n=>String(n).padStart(2,'0');
+  const nomi=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const fileName=`${y}-${pad(m+1)} (${nomi[m]}) - Ripartizioni spese di coabitazione.pdf`;
+  const fullPath=`006-COSTI E SPESE/001 - Ripartizioni spese di coabitazione/${fileName}`;
+  try {
+    const encoded=fullPath.split('/').map(p=>encodeURIComponent(p)).join('/');
+    const res=await apiGet(`/me/drive/root:/${encoded}`);
+    const url=res['@microsoft.graph.downloadUrl']||res.webUrl;
+    if(url) window.open(url,'_blank');
+    else showToast('URL non disponibile','error');
+  } catch(e) {
+    showToast('PDF non trovato','error');
   }
 }
 </script>
