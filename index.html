@@ -1158,7 +1158,10 @@ function kpDel() {
   updateValoreDisplay();
 }
 
-function parseValore() { return parseFloat(_kpVal.replace(',', '.')) || 0; }
+function parseValore() {
+  // Removes thousands dots (Italian format), then converts comma decimal to dot
+  return parseFloat(_kpVal.replace(/\./g, '').replace(',', '.')) || 0;
+}
 
 function setKpVal(n) {
   const s = String(Math.abs(n));
@@ -1178,6 +1181,15 @@ function updateValoreDisplay() {
     el.textContent = new Intl.NumberFormat('it-IT').format(parseInt(_kpVal) || 0);
   }
 }
+
+document.addEventListener('keydown', function(e) {
+  if (currentPage !== 'add') return;
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key >= '0' && e.key <= '9') { kpPress(e.key); e.preventDefault(); }
+  else if (e.key === ',' || e.key === '.') { kpPress(','); e.preventDefault(); }
+  else if (e.key === 'Backspace' || e.key === 'Delete') { kpDel(); e.preventDefault(); }
+});
 
 function resetForm(){
   _kpVal='';
@@ -1655,42 +1667,56 @@ function showToast(msg,type=''){
 
 // ── COABITAZIONE ──────────────────────────────────────────────
 let _coabUnlocked = false;
+let _coabAddingVoce = false;
+const _TIPO_LBL = { divisa:'Divisa', elia:'Solo Elia', aurora:'Solo Aurora', credito_elia:'Credito Elia', credito_aurora:'Credito Aurora' };
 
 function _coabKey() { return `coab_${coabMese.y}_${coabMese.m}`; }
-function _coabGetData() { const s=localStorage.getItem(_coabKey()); return s?JSON.parse(s):{stipAurora:0,excluded:[]}; }
+function _coabGetData() {
+  const s=localStorage.getItem(_coabKey());
+  const defaults={stipAurora:0,excluded:[],extraVoci:[],consegnato:false};
+  return s ? Object.assign(defaults,JSON.parse(s)) : defaults;
+}
 function _coabSetData(d) { localStorage.setItem(_coabKey(),JSON.stringify(d)); }
 function _coabIsPast() {
   const now=new Date();
   return coabMese.y<now.getFullYear()||(coabMese.y===now.getFullYear()&&coabMese.m<now.getMonth());
 }
+function _coabIsLocked(saved) { return (_coabIsPast()||saved.consegnato)&&!_coabUnlocked; }
 
 async function loadCoabitazione() {
   document.getElementById('coabContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
   try {
     const rows=await getTransazioni();
     const {y,m}=coabMese;
-    const locked=_coabIsPast()&&!_coabUnlocked;
+    const saved=_coabGetData();
+    const locked=_coabIsLocked(saved);
 
     const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
     const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
-    const saved=_coabGetData();
+    const giaIncassato=rows.some(r=>sameYM(r.data,y,m)&&r.valore>0&&(r.descrizione||'').toLowerCase().includes('aurora carminati'));
     const stipAurora=saved.stipAurora||0;
     const excluded=new Set(saved.excluded||[]);
+    const extraVoci=saved.extraVoci||[];
     const totRedditi=stipElia+stipAurora;
     const pctElia=totRedditi>0?stipElia/totRedditi:0.5;
     const pctAurora=1-pctElia;
-    const selected=uscite.filter(r=>!excluded.has(r._index));
-    const totSpese=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
-    const quotaElia=totSpese*pctElia;
-    const quotaAurora=totSpese*pctAurora;
-    const giaIncassato=rows.some(r=>sameYM(r.data,y,m)&&r.valore>0&&(r.descrizione||'').toLowerCase().includes('aurora carminati'));
+    const totTx=uscite.filter(r=>!excluded.has(r._index)).reduce((s,r)=>s+Math.abs(r.valore),0);
+    const totDivise=extraVoci.filter(v=>v.tipo==='divisa').reduce((s,v)=>s+v.importo,0);
+    const totCondiviso=totTx+totDivise;
+    const extraElia=extraVoci.filter(v=>v.tipo==='elia').reduce((s,v)=>s+v.importo,0);
+    const extraAurora=extraVoci.filter(v=>v.tipo==='aurora').reduce((s,v)=>s+v.importo,0);
+    const credElia=extraVoci.filter(v=>v.tipo==='credito_elia').reduce((s,v)=>s+v.importo,0);
+    const credAurora=extraVoci.filter(v=>v.tipo==='credito_aurora').reduce((s,v)=>s+v.importo,0);
+    const finalElia=totCondiviso*pctElia+extraElia-credElia;
+    const finalAurora=totCondiviso*pctAurora+extraAurora-credAurora;
+    const bonificoAurora=Math.max(0,finalAurora);
 
-    const lockBanner = locked ? `
+    const lockBanner=locked?`
       <div class="coab-lock-banner">
-        <span style="font-size:16px">&#128274;</span>
-        <span>Mese precedente — sola lettura</span>
+        <span style="font-size:16px">${saved.consegnato?'&#128228;':'&#128274;'}</span>
+        <span style="flex:1">${saved.consegnato?'Consegnato':'Mese precedente'} — sola lettura</span>
         <button class="btn-coab-unlock" style="width:auto;margin:0;padding:6px 14px;font-size:10px" onclick="sbloccoCoab()">Sblocca</button>
-      </div>` : '';
+      </div>`:'';
 
     const stipAuroraField = locked
       ? `<div style="text-align:right">
@@ -1704,27 +1730,62 @@ async function loadCoabitazione() {
            <div class="coab-pct">${(pctAurora*100).toFixed(1)}%</div>
          </div>`;
 
-    const itemHint = locked
-      ? ''
-      : `<div style="font-size:11px;color:var(--text2);margin-bottom:12px">Tocca per includere/escludere dal calcolo</div>`;
+    const itemList=uscite.length===0
+      ?'<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
+      :uscite.map(r=>`
+        <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}"
+             ${locked?'':`onclick="toggleCoabItem(${r._index})"`}
+             style="${locked?'cursor:default':''}">
+          <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
+          <div class="coab-item-info">
+            <div class="coab-item-cat">${r.tipologia||'—'}</div>
+            <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
+          </div>
+          <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
+        </div>`).join('');
 
-    const itemList = uscite.length===0
-      ? '<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
-      : uscite.map(r=>`
-          <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}"
-               ${locked?'':'onclick="toggleCoabItem('+r._index+')"'}
-               style="${locked?'cursor:default':''}">
-            <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
-            <div class="coab-item-info">
-              <div class="coab-item-cat">${r.tipologia||'—'}</div>
-              <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
+    const extraList=extraVoci.map(v=>`
+      <div class="coab-item" style="cursor:default">
+        <div class="coab-item-info">
+          <div class="coab-item-cat">${_TIPO_LBL[v.tipo]||v.tipo}</div>
+          <div class="coab-item-desc">${v.desc||'—'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div class="coab-item-amt" style="${v.tipo.includes('credito')?'color:var(--green)':''}">${v.tipo.includes('credito')?'−':''}${fmt(v.importo)}</div>
+          ${locked?'':`<button onclick="rimuoviVoce(${v.id})" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;-webkit-tap-highlight-color:transparent">&#215;</button>`}
+        </div>
+      </div>`).join('');
+
+    const addVoceBlock=locked?''
+      :(_coabAddingVoce
+        ?`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px;display:flex;flex-direction:column;gap:10px">
+            <input class="form-input" id="coabVoceDesc" placeholder="Descrizione" autocomplete="off">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input class="form-input" id="coabVoceImporto" type="number" min="0" step="0.01" placeholder="Importo (€)">
+              <select class="form-select" id="coabVoceTipo">
+                <option value="divisa">Divisa</option>
+                <option value="elia">Solo Elia</option>
+                <option value="aurora">Solo Aurora</option>
+                <option value="credito_aurora">Credito Aurora</option>
+                <option value="credito_elia">Credito Elia</option>
+              </select>
             </div>
-            <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
-          </div>`).join('');
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <button class="btn-save" style="margin:0;padding:12px;font-size:12px" onclick="confermAggiungiVoce()">Aggiungi</button>
+              <button class="btn-cancel-edit" style="display:block;margin:0;padding:12px;font-size:12px" onclick="annullaAggiungiVoce()">Annulla</button>
+            </div>
+          </div>`
+        :`<button class="btn-coab" style="margin-top:10px;margin-bottom:0" onclick="apriAggiungiVoce()">+ Aggiungi voce</button>`);
 
-    const incassoBtn = giaIncassato
-      ? `<div class="coab-incassato">&#9989; Incasso già registrato</div>`
-      : `<button class="btn-coab" onclick="registraCoabIncasso(${quotaAurora.toFixed(2)})">+ Registra incasso Aurora</button>`;
+    const incassoBtn=giaIncassato
+      ?`<div class="coab-incassato">&#9989; Incasso già registrato</div>`
+      :`<button class="btn-coab" onclick="registraCoabIncasso(${bonificoAurora.toFixed(2)})">+ Registra incasso Aurora</button>`;
+
+    const consegnaBtn=(!locked&&!_coabIsPast()&&!saved.consegnato)
+      ?`<button class="btn-coab" onclick="marcaConsegnato()">&#128228; Ho già consegnato</button>`
+      :(!locked&&saved.consegnato)
+      ?`<button class="btn-coab" onclick="annullaConsegnato()">Annulla consegna</button>`
+      :'';
 
     document.getElementById('coabContent').innerHTML=`
       <div class="month-selector" style="margin-bottom:16px">
@@ -1751,33 +1812,42 @@ async function loadCoabitazione() {
 
       <div class="coab-section">
         <div class="coab-title">Spese comuni — ${MESI_IT[m]}</div>
-        ${itemHint}
+        ${locked?'':`<div style="font-size:11px;color:var(--text2);margin-bottom:12px">Tocca per includere/escludere dal calcolo</div>`}
         ${itemList}
-        <div class="coab-subtot">
-          <span>Totale selezionato</span>
-          <span>${fmt(totSpese)}</span>
-        </div>
+        <div class="coab-subtot"><span>Da transazioni</span><span>${fmt(totTx)}</span></div>
+      </div>
+
+      <div class="coab-section">
+        <div class="coab-title">Voci aggiuntive</div>
+        ${extraVoci.length===0&&!_coabAddingVoce?'<div style="font-size:12px;color:var(--text2);padding:2px 0 8px">Nessuna voce aggiuntiva</div>':extraList}
+        ${extraVoci.length>0?`<div class="coab-subtot"><span>Extra divise</span><span>${fmt(totDivise)}</span></div>`:''}
+        ${addVoceBlock}
       </div>
 
       <div class="coab-section">
         <div class="coab-title">Calcolo quote</div>
         <div class="coab-row">
+          <div class="coab-lbl">Totale condiviso</div>
+          <div class="coab-val">${fmt(totCondiviso)}</div>
+        </div>
+        <div class="coab-row">
           <div class="coab-lbl">Quota Elia<span class="coab-pct">${(pctElia*100).toFixed(1)}%</span></div>
-          <div class="coab-val">${fmt(quotaElia)}</div>
+          <div class="coab-val">${fmt(finalElia)}</div>
         </div>
         <div class="coab-row">
           <div class="coab-lbl">Quota Aurora<span class="coab-pct">${(pctAurora*100).toFixed(1)}%</span></div>
-          <div class="coab-val" style="color:var(--accent)">${fmt(quotaAurora)}</div>
+          <div class="coab-val" style="color:var(--accent)">${fmt(finalAurora)}</div>
         </div>
         <div class="coab-row" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
           <div class="coab-lbl" style="font-size:14px;color:var(--text)">Bonifico da Aurora</div>
-          <div class="coab-val" style="font-size:20px;color:var(--green)">${fmt(quotaAurora)}</div>
+          <div class="coab-val" style="font-size:20px;color:var(--green)">${fmt(bonificoAurora)}</div>
         </div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:6px;text-align:right">IBAN: IT12Z0301503200000006395124 · Gatti Elia</div>
       </div>
 
       <button class="btn-coab-pdf" onclick="generaCoabPDF()">&#128438; Genera PDF</button>
       ${incassoBtn}
+      ${consegnaBtn}
     `;
   } catch(e) {
     document.getElementById('coabContent').innerHTML=`<div class="empty">Errore: ${e.message}</div>`;
@@ -1785,45 +1855,70 @@ async function loadCoabitazione() {
 }
 
 function cambiaCoabMese(dir) {
-  _coabUnlocked=false;
+  _coabUnlocked=false; _coabAddingVoce=false;
   coabMese.m+=dir;
   if(coabMese.m>11){coabMese.m=0;coabMese.y++;}
   if(coabMese.m<0) {coabMese.m=11;coabMese.y--;}
   loadCoabitazione();
 }
-
-function sbloccoCoab() { _coabUnlocked=true; loadCoabitazione(); }
-
+function sbloccoCoab()        { _coabUnlocked=true; _coabAddingVoce=false; loadCoabitazione(); }
+function apriAggiungiVoce()   { _coabAddingVoce=true;  loadCoabitazione(); }
+function annullaAggiungiVoce(){ _coabAddingVoce=false; loadCoabitazione(); }
 function salvaStipAurora(val) {
-  const d=_coabGetData();
-  d.stipAurora=parseFloat(val)||0;
-  _coabSetData(d);
-  loadCoabitazione();
+  const d=_coabGetData(); d.stipAurora=parseFloat(val)||0; _coabSetData(d); loadCoabitazione();
 }
-
 function toggleCoabItem(idx) {
-  const d=_coabGetData();
-  const ex=new Set(d.excluded||[]);
+  const d=_coabGetData(); const ex=new Set(d.excluded||[]);
   if(ex.has(idx)) ex.delete(idx); else ex.add(idx);
-  d.excluded=[...ex];
-  _coabSetData(d);
-  loadCoabitazione();
+  d.excluded=[...ex]; _coabSetData(d); loadCoabitazione();
+}
+function confermAggiungiVoce() {
+  const desc=(document.getElementById('coabVoceDesc')?.value||'').trim();
+  const importo=parseFloat(document.getElementById('coabVoceImporto')?.value)||0;
+  const tipo=document.getElementById('coabVoceTipo')?.value||'divisa';
+  if(!importo){showToast('Inserisci un importo','error');return;}
+  const d=_coabGetData(); if(!d.extraVoci)d.extraVoci=[];
+  d.extraVoci.push({id:Date.now(),desc:desc||_TIPO_LBL[tipo],importo,tipo});
+  _coabSetData(d); _coabAddingVoce=false; loadCoabitazione();
+}
+function rimuoviVoce(id) {
+  const d=_coabGetData(); d.extraVoci=(d.extraVoci||[]).filter(v=>v.id!==id);
+  _coabSetData(d); loadCoabitazione();
+}
+function marcaConsegnato() {
+  const d=_coabGetData(); d.consegnato=true; _coabSetData(d); _coabUnlocked=false; loadCoabitazione();
+}
+function annullaConsegnato() {
+  const d=_coabGetData(); d.consegnato=false; _coabSetData(d); loadCoabitazione();
 }
 
 async function generaCoabPDF() {
   const {y,m}=coabMese;
   const rows=await getTransazioni();
+  const saved=_coabGetData();
   const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
   const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
-  const saved=_coabGetData();
   const stipAurora=saved.stipAurora||0;
   const excluded=new Set(saved.excluded||[]);
+  const extraVoci=saved.extraVoci||[];
   const totRedditi=stipElia+stipAurora;
   const pctElia=totRedditi>0?stipElia/totRedditi:0.5;
   const pctAurora=1-pctElia;
   const selected=uscite.filter(r=>!excluded.has(r._index));
-  const totSpese=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
-  const quotaAurora=totSpese*pctAurora;
+  const totTx=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
+  const totDivise=extraVoci.filter(v=>v.tipo==='divisa').reduce((s,v)=>s+v.importo,0);
+  const totCondiviso=totTx+totDivise;
+  const extraElia=extraVoci.filter(v=>v.tipo==='elia').reduce((s,v)=>s+v.importo,0);
+  const extraAurora=extraVoci.filter(v=>v.tipo==='aurora').reduce((s,v)=>s+v.importo,0);
+  const credElia=extraVoci.filter(v=>v.tipo==='credito_elia').reduce((s,v)=>s+v.importo,0);
+  const credAurora=extraVoci.filter(v=>v.tipo==='credito_aurora').reduce((s,v)=>s+v.importo,0);
+  const finalElia=totCondiviso*pctElia+extraElia-credElia;
+  const finalAurora=totCondiviso*pctAurora+extraAurora-credAurora;
+  const bonificoAurora=Math.max(0,finalAurora);
+
+  const extraRows=extraVoci.length?`
+<h2>Voci aggiuntive</h2>
+${extraVoci.map(v=>`<div class="row"><div><div>${_TIPO_LBL[v.tipo]||v.tipo}</div><div class="desc">${v.desc||''}</div></div><span class="mono" style="${v.tipo.includes('credito')?'color:#b04040':'''}">${v.tipo.includes('credito')?'−':''}${fmt(v.importo)}</span></div>`).join('')}`:'';
 
   const pdfWin=window.open('','_blank');
   pdfWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -1835,7 +1930,7 @@ async function generaCoabPDF() {
   h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#888;margin:24px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
   .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
   .row.total{font-weight:bold;border-top:2px solid #222;border-bottom:none;font-size:15px;margin-top:4px;padding-top:10px}
-  .row.highlight{background:#f9f5f0;padding:12px;border-radius:6px;border:1px solid #ddd;margin-top:16px;align-items:center}
+  .row.highlight{background:#f9f5f0;padding:12px;border-radius:6px;border:1px solid #ddd;margin-top:16px;align-items:center;display:flex;justify-content:space-between}
   .mono{font-family:monospace}
   .desc{color:#777;font-size:11px;font-family:monospace}
   .iban{font-family:monospace;font-size:11px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:10px}
@@ -1851,15 +1946,17 @@ async function generaCoabPDF() {
 <div class="row"><span>% Elia</span><span class="mono">${(pctElia*100).toFixed(1)}%</span></div>
 <div class="row"><span>% Aurora</span><span class="mono">${(pctAurora*100).toFixed(1)}%</span></div>
 
-<h2>Spese comuni</h2>
+<h2>Spese comuni da transazioni</h2>
 ${selected.map(r=>`<div class="row"><div><div>${r.tipologia||'—'}</div><div class="desc">${r.descrizione||r.cadenza||''} &nbsp; ${formatDate(r.data)}</div></div><span class="mono">${fmt(Math.abs(r.valore))}</span></div>`).join('')}
-<div class="row total"><span>Totale spese comuni</span><span class="mono">${fmt(totSpese)}</span></div>
+<div class="row total"><span>Totale da transazioni</span><span class="mono">${fmt(totTx)}</span></div>
+${extraRows}
+<div class="row total"><span>Totale condiviso</span><span class="mono">${fmt(totCondiviso)}</span></div>
 
 <h2>Calcolo quote</h2>
-<div class="row"><span>Quota Elia (${(pctElia*100).toFixed(1)}%)</span><span class="mono">${fmt(totSpese*pctElia)}</span></div>
-<div class="row"><span>Quota Aurora (${(pctAurora*100).toFixed(1)}%)</span><span class="mono">${fmt(quotaAurora)}</span></div>
+<div class="row"><span>Quota Elia (${(pctElia*100).toFixed(1)}%)</span><span class="mono">${fmt(finalElia)}</span></div>
+<div class="row"><span>Quota Aurora (${(pctAurora*100).toFixed(1)}%)</span><span class="mono">${fmt(finalAurora)}</span></div>
 
-<div class="row highlight"><span style="font-size:15px"><strong>Bonifico da Aurora a Elia</strong></span><span class="mono" style="font-size:22px;color:#2a7a4a"><strong>${fmt(quotaAurora)}</strong></span></div>
+<div class="row highlight"><span style="font-size:15px"><strong>Bonifico da Aurora a Elia</strong></span><span class="mono" style="font-size:22px;color:#2a7a4a"><strong>${fmt(bonificoAurora)}</strong></span></div>
 
 <div class="iban">Beneficiario: Gatti Elia &nbsp;&nbsp; IBAN: IT12Z0301503200000006395124</div>
 
