@@ -1918,7 +1918,7 @@ async function generaCoabPDF() {
 
   const extraRows=extraVoci.length?`
 <h2>Voci aggiuntive</h2>
-${extraVoci.map(v=>`<div class="row"><div><div>${_TIPO_LBL[v.tipo]||v.tipo}</div><div class="desc">${v.desc||''}</div></div><span class="mono" style="${v.tipo.includes('credito')?'color:#b04040':'''}">${v.tipo.includes('credito')?'−':''}${fmt(v.importo)}</span></div>`).join('')}`:'';
+${extraVoci.map(v=>`<div class="row"><div><div>${_TIPO_LBL[v.tipo]||v.tipo}</div><div class="desc">${v.desc||''}</div></div><span class="mono" style="${v.tipo.includes('credito')?'color:#b04040':''}">${v.tipo.includes('credito')?'−':''}${fmt(v.importo)}</span></div>`).join('')}`:'';
 
   const pdfWin=window.open('','_blank');
   pdfWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
