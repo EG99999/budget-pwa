@@ -328,6 +328,31 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .spinner { width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; margin-right:10px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .empty { text-align:center; padding:48px 24px; color:var(--text2); font-size:14px; line-height:1.6; }
+
+/* ── COABITAZIONE ─────────────────────────────────────────── */
+.coab-section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.coab-title { font-size:10px; letter-spacing:.25em; text-transform:uppercase; color:var(--accent); font-family:var(--mono); margin-bottom:14px; }
+.coab-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); gap:12px; }
+.coab-row:last-child { border-bottom:none; }
+.coab-lbl { font-size:13px; color:var(--text); display:flex; flex-direction:column; gap:3px; }
+.coab-sublbl { font-size:10px; color:var(--text2); font-family:var(--mono); letter-spacing:.05em; }
+.coab-val { font-family:var(--mono); font-size:14px; color:var(--text); text-align:right; }
+.coab-pct { font-family:var(--mono); font-size:10px; color:var(--accent); background:rgba(200,169,126,.1); border:1px solid rgba(200,169,126,.25); border-radius:20px; padding:2px 8px; display:inline-block; margin-top:3px; }
+.coab-input { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:14px; outline:none; width:120px; text-align:right; transition:border-color .2s; }
+.coab-input:focus { border-color:var(--accent); }
+.coab-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:opacity .15s; }
+.coab-item.coab-item-off { opacity:.38; }
+.coab-chk { font-size:18px; flex-shrink:0; width:22px; color:var(--accent); }
+.coab-item-info { flex:1; min-width:0; }
+.coab-item-cat { font-family:var(--mono); font-size:9px; color:var(--text2); letter-spacing:.1em; text-transform:uppercase; }
+.coab-item-desc { font-size:12px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+.coab-item-amt { font-family:var(--mono); font-size:13px; color:var(--red); flex-shrink:0; }
+.coab-subtot { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:4px; border-top:1px solid var(--border); font-family:var(--mono); font-size:12px; color:var(--text2); }
+.coab-subtot span:last-child { color:var(--text); font-size:14px; }
+.btn-coab-pdf { width:100%; background:var(--accent); color:var(--bg); border:none; border-radius:var(--radius); padding:15px; font-family:var(--mono); font-size:13px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; margin-bottom:10px; transition:opacity .2s; }
+.btn-coab-pdf:active { opacity:.8; }
+.btn-coab { width:100%; background:transparent; border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--text2); cursor:pointer; margin-bottom:16px; transition:border-color .15s, color .15s; }
+.btn-coab:active { border-color:var(--accent); color:var(--accent); }
 </style>
 </head>
 <body>
@@ -551,6 +576,10 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     </div>
   </div>
 
+  <div class="page" id="pageCoabitazione">
+    <div id="coabContent"><div class="loading"><div class="spinner"></div>CARICAMENTO</div></div>
+  </div>
+
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-side active" id="navCruscotto" onclick="showPage('cruscotto')">
@@ -610,6 +639,11 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
       <span class="di-icon">&#128202;</span>
       <span class="di-text"><span class="di-name">Grafici</span><span class="di-sub">Trend, categorie e budget</span></span>
     </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-item" data-page="coabitazione" onclick="drawerNav('coabitazione')">
+      <span class="di-icon">&#128101;</span>
+      <span class="di-text"><span class="di-name">Coabitazione</span><span class="di-sub">Spese condivise con Aurora</span></span>
+    </button>
   </nav>
 </div>
 
@@ -625,7 +659,8 @@ const MESI_IT = ['GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO',
 const PAGE_LABELS = {
   cruscotto:'Cruscotto', budget:'Budget', add:'Nuova voce',
   lista:'Lista', dash:'Dashboard', annuale:'Budget annuale',
-  cfo:'Analisi CFO', casa:'Casa', servizi:'Servizi', grafici:'Grafici'
+  cfo:'Analisi CFO', casa:'Casa', servizi:'Servizi', grafici:'Grafici',
+  coabitazione:'Coabitazione'
 };
 
 const msalConfig = {
@@ -649,6 +684,7 @@ let listaFSenso  = '';
 let listaFCat    = '';
 let listaFSort   = 'data-desc';
 let budgetMese   = { y: new Date().getFullYear(), m: new Date().getMonth() };
+let coabMese     = { y: new Date().getFullYear(), m: new Date().getMonth() };
 
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
@@ -736,7 +772,7 @@ function updateHeaderCenter(page) {
 }
 
 // ── NAVIGAZIONE ─────────────────────────────────────────────
-const ALL_PAGES    = ['cruscotto','budget','add','lista','dash','annuale','cfo','casa','servizi','grafici'];
+const ALL_PAGES    = ['cruscotto','budget','add','lista','dash','annuale','cfo','casa','servizi','grafici','coabitazione'];
 const BOTTOM_PAGES = ['cruscotto','add','budget'];
 
 function showPage(page) {
@@ -759,8 +795,9 @@ function showPage(page) {
   if (page==='cfo')       loadCfo();
   if (page==='casa')      loadCasa();
   if (page==='servizi')   loadServizi();
-  if (page==='grafici')   loadGrafici();
-  if (page==='add')       loadRecenti();
+  if (page==='grafici')       loadGrafici();
+  if (page==='coabitazione')  loadCoabitazione();
+  if (page==='add')           loadRecenti();
 }
 
 function cap(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
@@ -1610,6 +1647,198 @@ function showToast(msg,type=''){
   t.textContent=msg; t.className='toast show '+type;
   clearTimeout(t._timer);
   t._timer=setTimeout(()=>t.className='toast',2800);
+}
+
+// ── COABITAZIONE ──────────────────────────────────────────────
+function _coabKey() { return `coab_${coabMese.y}_${coabMese.m}`; }
+function _coabGetData() { const s=localStorage.getItem(_coabKey()); return s?JSON.parse(s):{stipAurora:0,excluded:[]}; }
+function _coabSetData(d) { localStorage.setItem(_coabKey(),JSON.stringify(d)); }
+
+async function loadCoabitazione() {
+  document.getElementById('coabContent').innerHTML='<div class="loading"><div class="spinner"></div>CARICAMENTO</div>';
+  try {
+    const rows=await getTransazioni();
+    const {y,m}=coabMese;
+    const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
+    const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
+    const saved=_coabGetData();
+    const stipAurora=saved.stipAurora||0;
+    const excluded=new Set(saved.excluded||[]);
+    const totRedditi=stipElia+stipAurora;
+    const pctElia=totRedditi>0?stipElia/totRedditi:0.5;
+    const pctAurora=1-pctElia;
+    const selected=uscite.filter(r=>!excluded.has(r._index));
+    const totSpese=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
+    const quotaElia=totSpese*pctElia;
+    const quotaAurora=totSpese*pctAurora;
+
+    document.getElementById('coabContent').innerHTML=`
+      <div class="month-selector" style="margin-bottom:16px">
+        <button class="month-arrow" onclick="cambiaCoabMese(-1)">&#8249;</button>
+        <div class="month-label">${MESI_IT[m]} ${y}</div>
+        <button class="month-arrow" onclick="cambiaCoabMese(1)">&#8250;</button>
+      </div>
+
+      <div class="coab-section">
+        <div class="coab-title">Redditi</div>
+        <div class="coab-row">
+          <div class="coab-lbl">Stipendio Elia<span class="coab-sublbl">da transazioni</span></div>
+          <div style="text-align:right">
+            <div class="coab-val">${stipElia>0?fmt(stipElia):'—'}</div>
+            <div class="coab-pct">${(pctElia*100).toFixed(1)}%</div>
+          </div>
+        </div>
+        <div class="coab-row">
+          <div class="coab-lbl">Stipendio Aurora<span class="coab-sublbl">inserito manualmente</span></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            <input class="coab-input" type="number" min="0" step="0.01"
+                   value="${stipAurora||''}" placeholder="0,00"
+                   onchange="salvaStipAurora(this.value)">
+            <div class="coab-pct">${(pctAurora*100).toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coab-section">
+        <div class="coab-title">Spese comuni — ${MESI_IT[m]}</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Tocca per includere/escludere dal calcolo</div>
+        ${uscite.length===0
+          ? '<div class="empty" style="padding:16px 0">Nessuna uscita questo mese</div>'
+          : uscite.map(r=>`
+            <div class="coab-item${excluded.has(r._index)?' coab-item-off':''}" onclick="toggleCoabItem(${r._index})">
+              <div class="coab-chk">${excluded.has(r._index)?'&#9633;':'&#9745;'}</div>
+              <div class="coab-item-info">
+                <div class="coab-item-cat">${r.tipologia||'—'}</div>
+                <div class="coab-item-desc">${r.descrizione||r.cadenza||'—'}</div>
+              </div>
+              <div class="coab-item-amt">${fmt(Math.abs(r.valore))}</div>
+            </div>`).join('')}
+        <div class="coab-subtot">
+          <span>Totale selezionato</span>
+          <span>${fmt(totSpese)}</span>
+        </div>
+      </div>
+
+      <div class="coab-section">
+        <div class="coab-title">Calcolo quote</div>
+        <div class="coab-row">
+          <div class="coab-lbl">Quota Elia<span class="coab-pct">${(pctElia*100).toFixed(1)}%</span></div>
+          <div class="coab-val">${fmt(quotaElia)}</div>
+        </div>
+        <div class="coab-row">
+          <div class="coab-lbl">Quota Aurora<span class="coab-pct">${(pctAurora*100).toFixed(1)}%</span></div>
+          <div class="coab-val" style="color:var(--accent)">${fmt(quotaAurora)}</div>
+        </div>
+        <div class="coab-row" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+          <div class="coab-lbl" style="font-size:14px;color:var(--text)">Bonifico da Aurora</div>
+          <div class="coab-val" style="font-size:20px;color:var(--green)">${fmt(quotaAurora)}</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:6px;text-align:right">IBAN: IT12Z0301503200000006395124 · Gatti Elia</div>
+      </div>
+
+      <button class="btn-coab-pdf" onclick="generaCoabPDF()">&#128438; Genera PDF</button>
+      <button class="btn-coab" onclick="registraCoabIncasso(${quotaAurora.toFixed(2)})">+ Registra incasso Aurora</button>
+    `;
+  } catch(e) {
+    document.getElementById('coabContent').innerHTML=`<div class="empty">Errore: ${e.message}</div>`;
+  }
+}
+
+function cambiaCoabMese(dir) {
+  coabMese.m+=dir;
+  if(coabMese.m>11){coabMese.m=0;coabMese.y++;}
+  if(coabMese.m<0) {coabMese.m=11;coabMese.y--;}
+  loadCoabitazione();
+}
+
+function salvaStipAurora(val) {
+  const d=_coabGetData();
+  d.stipAurora=parseFloat(val)||0;
+  _coabSetData(d);
+  loadCoabitazione();
+}
+
+function toggleCoabItem(idx) {
+  const d=_coabGetData();
+  const ex=new Set(d.excluded||[]);
+  if(ex.has(idx)) ex.delete(idx); else ex.add(idx);
+  d.excluded=[...ex];
+  _coabSetData(d);
+  loadCoabitazione();
+}
+
+async function generaCoabPDF() {
+  const {y,m}=coabMese;
+  const rows=await getTransazioni();
+  const stipElia=rows.filter(r=>sameYM(r.data,y,m)&&r.valore>0&&r.tipologia==='STIPENDIO').reduce((s,r)=>s+r.valore,0);
+  const uscite=rows.filter(r=>sameYM(r.data,y,m)&&r.valore<0);
+  const saved=_coabGetData();
+  const stipAurora=saved.stipAurora||0;
+  const excluded=new Set(saved.excluded||[]);
+  const totRedditi=stipElia+stipAurora;
+  const pctElia=totRedditi>0?stipElia/totRedditi:0.5;
+  const pctAurora=1-pctElia;
+  const selected=uscite.filter(r=>!excluded.has(r._index));
+  const totSpese=selected.reduce((s,r)=>s+Math.abs(r.valore),0);
+  const quotaAurora=totSpese*pctAurora;
+
+  const pdfWin=window.open('','_blank');
+  pdfWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Coabitazione ${MESI_IT[m]} ${y}</title>
+<style>
+  body{font-family:Georgia,serif;max-width:600px;margin:40px auto;color:#222;padding:0 20px}
+  h1{font-size:22px;margin-bottom:4px}
+  .sub{font-size:12px;color:#666;margin-bottom:24px;font-family:monospace}
+  h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#888;margin:24px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
+  .row.total{font-weight:bold;border-top:2px solid #222;border-bottom:none;font-size:15px;margin-top:4px;padding-top:10px}
+  .row.highlight{background:#f9f5f0;padding:12px;border-radius:6px;border:1px solid #ddd;margin-top:16px;align-items:center}
+  .mono{font-family:monospace}
+  .desc{color:#777;font-size:11px;font-family:monospace}
+  .iban{font-family:monospace;font-size:11px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:10px}
+  @media print{body{margin:0}}
+</style></head><body>
+<h1>Spese di Coabitazione</h1>
+<div class="sub">${MESI_IT[m]} ${y} &mdash; Vicolo Tonale 4, Chiari (BS) 25032</div>
+
+<h2>Redditi</h2>
+<div class="row"><span>Stipendio Elia Gatti</span><span class="mono">${fmt(stipElia)}</span></div>
+<div class="row"><span>Stipendio Aurora Carminati</span><span class="mono">${fmt(stipAurora)}</span></div>
+<div class="row total"><span>Totale redditi</span><span class="mono">${fmt(stipElia+stipAurora)}</span></div>
+<div class="row"><span>% Elia</span><span class="mono">${(pctElia*100).toFixed(1)}%</span></div>
+<div class="row"><span>% Aurora</span><span class="mono">${(pctAurora*100).toFixed(1)}%</span></div>
+
+<h2>Spese comuni</h2>
+${selected.map(r=>`<div class="row"><div><div>${r.tipologia||'—'}</div><div class="desc">${r.descrizione||r.cadenza||''} &nbsp; ${formatDate(r.data)}</div></div><span class="mono">${fmt(Math.abs(r.valore))}</span></div>`).join('')}
+<div class="row total"><span>Totale spese comuni</span><span class="mono">${fmt(totSpese)}</span></div>
+
+<h2>Calcolo quote</h2>
+<div class="row"><span>Quota Elia (${(pctElia*100).toFixed(1)}%)</span><span class="mono">${fmt(totSpese*pctElia)}</span></div>
+<div class="row"><span>Quota Aurora (${(pctAurora*100).toFixed(1)}%)</span><span class="mono">${fmt(quotaAurora)}</span></div>
+
+<div class="row highlight"><span style="font-size:15px"><strong>Bonifico da Aurora a Elia</strong></span><span class="mono" style="font-size:22px;color:#2a7a4a"><strong>${fmt(quotaAurora)}</strong></span></div>
+
+<div class="iban">Beneficiario: Gatti Elia &nbsp;&nbsp; IBAN: IT12Z0301503200000006395124</div>
+
+<script>window.print();window.onafterprint=function(){window.close()};<\/script>
+</body></html>`);
+  pdfWin.document.close();
+}
+
+async function registraCoabIncasso(importo) {
+  const {y,m}=coabMese;
+  const conferma=confirm(`Registrare entrata di ${fmt(importo)} da Aurora Carminati per ${MESI_IT[m]} ${y}?`);
+  if(!conferma)return;
+  const dataStr=new Date(y,m,28).toISOString().split('T')[0];
+  const rowValues=['ENTRATA','CREDITO',importo,'SECCA','Coabitazione Aurora Carminati','ELETTRONICO','BONIFICO',dataStr,MESI_IT[m]];
+  try {
+    const cfg=getConfig();
+    await apiPost(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`,{values:[rowValues]});
+    invalidateCache();
+    showToast('Incasso registrato','success');
+  } catch(e) {
+    showToast('Errore: '+e.message,'error');
+  }
 }
 </script>
 <!-- RICHIAMA OVERLAY -->
