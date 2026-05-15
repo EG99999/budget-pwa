@@ -209,6 +209,13 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .btn-save:disabled { opacity:.4; cursor:not-allowed; }
 .btn-cancel-edit { width:100%; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-family:var(--mono); font-size:13px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; margin-top:8px; display:none; }
 
+/* ── KEYPAD ───────────────────────────────────────────────────── */
+.keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+.kp { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:13px 8px; font-family:var(--mono); font-size:22px; color:var(--text); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .08s, transform .06s; user-select:none; line-height:1; }
+.kp:active { background:var(--surface); transform:scale(.94); }
+.kp-sep { font-size:24px; font-weight:bold; }
+.kp-del { font-size:19px; color:var(--text2); }
+
 /* ── RECENTI ──────────────────────────────────────────────── */
 .recenti-header { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--text2); font-family:var(--mono); margin-bottom:8px; }
 .recenti-scroll { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px; margin-bottom:16px; }
@@ -383,8 +390,21 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
     </div>
     <div class="form-section">
       <span class="form-label">Importo</span>
-      <div class="valore-display uscita placeholder" id="valoreDisplay" onclick="focusValore()">0,00</div>
-      <input type="text" id="valoreHidden" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px" inputmode="decimal" oninput="sanitizeValore(this);updateValoreDisplay()">
+      <div class="valore-display uscita placeholder" id="valoreDisplay">0,00</div>
+      <div class="keypad">
+        <button class="kp" onclick="kpPress('7')">7</button>
+        <button class="kp" onclick="kpPress('8')">8</button>
+        <button class="kp" onclick="kpPress('9')">9</button>
+        <button class="kp" onclick="kpPress('4')">4</button>
+        <button class="kp" onclick="kpPress('5')">5</button>
+        <button class="kp" onclick="kpPress('6')">6</button>
+        <button class="kp" onclick="kpPress('1')">1</button>
+        <button class="kp" onclick="kpPress('2')">2</button>
+        <button class="kp" onclick="kpPress('3')">3</button>
+        <button class="kp kp-sep" onclick="kpPress(',')">&#44;</button>
+        <button class="kp" onclick="kpPress('0')">0</button>
+        <button class="kp kp-del" onclick="kpDel()">&#9003;</button>
+      </div>
     </div>
     <div class="form-section">
       <div class="form-row">
@@ -867,7 +887,7 @@ function richiamaVoce(r) {
   document.getElementById('btnCancelEdit').style.display = 'none';
   const senso = (r.senso||(r.valore<0?'USCITA':'ENTRATA')).toUpperCase();
   setSenso(senso);
-  document.getElementById('valoreHidden').value = Math.abs(r.valore);
+  setKpVal(r.valore);
   updateValoreDisplay();
   if (r.tipologia)   document.getElementById('fTipologia').value = r.tipologia;
   if (r.cadenza)     document.getElementById('fCadenza').value   = r.cadenza;
@@ -1046,7 +1066,7 @@ function preparaEdit(r) {
   document.getElementById('recentiSection').style.display= 'none';
   const senso=(r.senso||(r.valore<0?'USCITA':'ENTRATA')).toUpperCase();
   setSenso(senso);
-  document.getElementById('valoreHidden').value = Math.abs(r.valore);
+  setKpVal(r.valore);
   updateValoreDisplay();
   if (r.tipologia)   document.getElementById('fTipologia').value = r.tipologia;
   if (r.cadenza)     document.getElementById('fCadenza').value   = r.cadenza;
@@ -1072,31 +1092,51 @@ function setSenso(senso) {
   document.getElementById('btnEntrata').className = 'senso-btn'+(senso==='ENTRATA'?' active-entrata':'');
   updateValoreDisplay();
 }
-function focusValore(){document.getElementById('valoreHidden').focus();}
-function sanitizeValore(inp){
-  let v=inp.value.replace(/[^0-9.,]/g,'');
-  const sep=v.search(/[.,]/);
-  if(sep!==-1) v=v.slice(0,sep+1)+v.slice(sep+1).replace(/[.,]/g,'');
-  inp.value=v;
-}
-function parseValore(raw){return parseFloat((raw||'').replace(',','.'))||0;}
-function updateValoreDisplay(){
-  const inp=document.getElementById('valoreHidden'), el=document.getElementById('valoreDisplay');
-  const raw=inp.value.trim();
-  const v=parseValore(raw);
-  if(!raw||v===0){el.textContent='0,00';el.className='valore-display placeholder';return;}
-  el.className='valore-display '+currentSenso.toLowerCase();
-  const normIdx=raw.search(/[.,]/);
-  if(normIdx!==-1){
-    const intPart=Math.abs(parseInt(raw.slice(0,normIdx),10))||0;
-    const decPart=raw.slice(normIdx+1);
-    el.textContent=new Intl.NumberFormat('it-IT').format(intPart)+','+decPart;
+// ── KEYPAD ────────────────────────────────────────────────────
+let _kpVal = ''; // stato interno importo
+
+function kpPress(ch) {
+  if (ch === ',') {
+    if (_kpVal.includes(',')) return;
+    if (_kpVal === '') _kpVal = '0';
+    _kpVal += ',';
   } else {
-    el.textContent=fmt(Math.abs(v));
+    const sep = _kpVal.indexOf(',');
+    if (sep !== -1 && _kpVal.length - sep > 2) return; // max 2 decimali
+    if (_kpVal === '0') _kpVal = ch;
+    else _kpVal += ch;
+  }
+  updateValoreDisplay();
+}
+
+function kpDel() {
+  _kpVal = _kpVal.slice(0, -1);
+  updateValoreDisplay();
+}
+
+function parseValore() { return parseFloat(_kpVal.replace(',', '.')) || 0; }
+
+function setKpVal(n) {
+  const s = String(Math.abs(n));
+  _kpVal = s.includes('.') ? s.replace('.', ',') : s;
+  if (_kpVal === '0') _kpVal = '';
+}
+
+function updateValoreDisplay() {
+  const el = document.getElementById('valoreDisplay');
+  if (!_kpVal) { el.textContent='0,00'; el.className='valore-display placeholder'; return; }
+  el.className = 'valore-display '+currentSenso.toLowerCase();
+  const sep = _kpVal.indexOf(',');
+  if (sep !== -1) {
+    const intPart = parseInt(_kpVal.slice(0, sep)) || 0;
+    el.textContent = new Intl.NumberFormat('it-IT').format(intPart) + ',' + _kpVal.slice(sep+1);
+  } else {
+    el.textContent = new Intl.NumberFormat('it-IT').format(parseInt(_kpVal) || 0);
   }
 }
+
 function resetForm(){
-  document.getElementById('valoreHidden').value='';
+  _kpVal='';
   document.getElementById('fDesc').value='';
   document.getElementById('fTipologia').value='';
   document.getElementById('fCadenza').value='SECCA';
@@ -1105,7 +1145,7 @@ function resetForm(){
 }
 
 async function salvaTransazione() {
-  const vRaw=parseValore(document.getElementById('valoreHidden').value);
+  const vRaw=parseValore();
   const tip=document.getElementById('fTipologia').value;
   const data=document.getElementById('fData').value;
   if (!vRaw||isNaN(vRaw)){showToast('Inserisci un importo','error');return;}
