@@ -374,6 +374,46 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .coab-lock-banner{display:flex;align-items:center;gap:10px;background:rgba(120,120,128,.1);border:1px solid var(--sep);border-radius:10px;padding:11px 14px;margin-bottom:14px;font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:.04em}
 .coab-incassato{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:14px;background:var(--green-bg);border:1px solid rgba(48,209,88,.25);font-family:var(--mono);font-size:12px;color:var(--green);letter-spacing:.06em;margin-bottom:14px}
 
+/* ── UPDATE POPUP ──────────────────────────────────────────── */
+#updatePopup{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:32px;text-align:center}
+#updatePopup.show{display:flex}
+.update-popup-icon{font-size:52px;line-height:1}
+.update-popup-title{font-size:22px;font-weight:700;letter-spacing:-.3px}
+.update-popup-sub{font-size:14px;color:var(--text2);line-height:1.55;max-width:280px}
+.btn-update{background:var(--accent);color:#000;border:none;border-radius:14px;padding:17px 52px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:transform .15s var(--ease),opacity .15s;letter-spacing:-.1px}
+.btn-update:active{transform:scale(.97);opacity:.88}
+
+/* ── AUTH GRID ─────────────────────────────────────────────── */
+.auth-grid-bg{position:absolute;inset:0;background-image:linear-gradient(var(--sep) 1px,transparent 1px),linear-gradient(90deg,var(--sep) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;mask-image:radial-gradient(ellipse 80% 55% at 50% 0%,black 20%,transparent 100%);-webkit-mask-image:radial-gradient(ellipse 80% 55% at 50% 0%,black 20%,transparent 100%);opacity:.7}
+#authScreen{position:relative;overflow:hidden}
+
+/* ── AUTH BADGES ───────────────────────────────────────────── */
+.auth-badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:-4px}
+.auth-badge{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:.06em}
+
+/* ── AVATAR & REFRESH ──────────────────────────────────────── */
+.header-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#000;font-family:var(--mono);font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;flex-shrink:0}
+.btn-refresh{background:none;border:none;color:var(--text2);cursor:pointer;padding:7px;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;-webkit-tap-highlight-color:transparent;border-radius:8px;transition:color .15s}
+.btn-refresh:active{color:var(--accent)}
+.btn-refresh.spinning{animation:spin .75s linear infinite}
+
+/* ── SIDEBAR BADGE ─────────────────────────────────────────── */
+.sb-badge{display:inline-block;background:var(--red);color:#fff;font-family:var(--mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;margin-left:auto;flex-shrink:0;line-height:1.6}
+
+/* ── LISTA TOOLBAR ─────────────────────────────────────────── */
+.lista-toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.search-input{flex:1;background:var(--surface);border:1px solid var(--sep);border-radius:20px;padding:9px 16px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .2s}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--text3)}
+.btn-csv{background:var(--surface);border:1px solid var(--sep);border-radius:20px;padding:9px 14px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s;-webkit-tap-highlight-color:transparent;flex-shrink:0}
+.btn-csv:active{border-color:var(--accent);color:var(--accent)}
+
+/* ── SKELETON ──────────────────────────────────────────────── */
+.skel{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200% 100%;animation:skel-shine 1.5s ease infinite;border-radius:8px}
+@keyframes skel-shine{from{background-position:200% 0}to{background-position:-200% 0}}
+.skel-card{height:80px;border-radius:var(--radius)}
+.skel-bar{height:52px;border-radius:var(--radius-sm)}
+
 /* ── DESKTOP RESPONSIVE ────────────────────────────────────── */
 @media(min-width:740px){
   .sidebar{display:flex}
@@ -398,10 +438,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 <!-- AUTH -->
 <div id="authScreen">
+  <div class="auth-grid-bg"></div>
   <div class="auth-logo">Budget Personale</div>
   <h1 class="auth-title">I tuoi<br><span>soldi</span>,<br>sempre con te.</h1>
   <p class="auth-subtitle">Accedi con il tuo account Microsoft per sincronizzare il tuo file Excel su OneDrive.</p>
-  <button class="btn-login" id="btnLogin" onclick="login()" disabled>Accedi con Microsoft</button>
+  <button class="btn-login" id="btnLogin" onclick="login()" disabled>
+    <svg style="display:inline;vertical-align:-3px;margin-right:9px" width="16" height="16" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+    Accedi con Microsoft
+  </button>
+  <div class="auth-badges">
+    <span class="auth-badge">Solo OneDrive</span>
+    <span class="auth-badge">Nessun server</span>
+    <span class="auth-badge">Dati privati</span>
+  </div>
 </div>
 
 <!-- SETUP -->
@@ -443,7 +492,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
       <button class="sb-item active" data-page="cruscotto" onclick="showPage('cruscotto')"><span class="sb-icon">💼</span>Cruscotto</button>
       <button class="sb-item" data-page="add" onclick="showPage('add')"><span class="sb-icon">＋</span>Aggiungi voce</button>
       <div class="sb-divider"></div>
-      <button class="sb-item" data-page="budget" onclick="showPage('budget')"><span class="sb-icon">🎯</span>Budget</button>
+      <button class="sb-item" data-page="budget" onclick="showPage('budget')"><span class="sb-icon">🎯</span>Budget<span class="sb-badge" id="sbBudgetBadge" style="display:none"></span></button>
       <button class="sb-item" data-page="dash" onclick="showPage('dash')"><span class="sb-icon">◆</span>Dashboard</button>
       <button class="sb-item" data-page="annuale" onclick="showPage('annuale')"><span class="sb-icon">📅</span>Budget annuale</button>
       <button class="sb-item" data-page="cfo" onclick="showPage('cfo')"><span class="sb-icon">📈</span>Analisi CFO</button>
@@ -463,11 +512,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
   <!-- HEADER -->
   <div class="app-header">
-    <div class="header-title">Budget</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="header-avatar" id="headerAvatar"></div>
+      <div class="header-title">Budget</div>
+    </div>
     <div class="header-center" id="headerCenter"></div>
-    <button class="header-menu" onclick="openDrawer()" aria-label="Menu">
-      <span></span><span></span><span></span>
-    </button>
+    <div style="display:flex;align-items:center;gap:2px">
+      <button class="btn-refresh" id="btnRefresh" onclick="refreshData()" title="Aggiorna dati">&#8635;</button>
+      <button class="header-menu" onclick="openDrawer()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
   </div>
 
   <!-- PAGES -->
@@ -577,6 +632,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   </div>
 
   <div class="page" id="pageLista">
+    <div class="lista-toolbar">
+      <input class="search-input" id="listaSearch" type="search" placeholder="Cerca categoria o descrizione…" oninput="setListaSearch(this.value)">
+      <button class="btn-csv" onclick="exportCSV()" title="Esporta CSV">↓ CSV</button>
+    </div>
     <div class="lista-period">
       <button class="period-btn active" id="pBtnMese"  onclick="setPeriodo('mese')">Mese</button>
       <button class="period-btn"        id="pBtnAnno"  onclick="setPeriodo('anno')">Anno</button>
@@ -840,6 +899,14 @@ function startApp() {
   document.getElementById('fData').value = new Date().toISOString().split('T')[0];
   initCoabStorico();
   updateHeaderCenter('cruscotto');
+  initSW();
+  const acc = msalInstance.getActiveAccount();
+  if (acc && acc.name) {
+    const parts = acc.name.trim().split(/\s+/);
+    const initials = (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+    const av = document.getElementById('headerAvatar');
+    if (av) { av.textContent = initials; av.style.display = 'flex'; }
+  }
   loadCruscotto();
 }
 
@@ -1095,9 +1162,16 @@ async function renderLista() {
       return true;
     });
 
-    // Filtro senso e categoria
+    // Filtro senso, categoria e ricerca testo
     if (listaFSenso) filtered = filtered.filter(r=>(r.senso||'').toUpperCase()===listaFSenso);
     if (listaFCat)   filtered = filtered.filter(r=>r.tipologia===listaFCat);
+    if (_listaSearch) {
+      const q = _listaSearch.toLowerCase();
+      filtered = filtered.filter(r =>
+        (r.tipologia||'').toLowerCase().includes(q) ||
+        (r.descrizione||'').toLowerCase().includes(q));
+    }
+    window._listaFiltered = filtered;
 
     // Ordinamento
     filtered.sort((a,b)=>{
@@ -1218,6 +1292,7 @@ function setSenso(senso) {
 let _kpVal = ''; // stato interno importo
 
 function kpPress(ch) {
+  if (navigator.vibrate) navigator.vibrate(8);
   if (ch === ',') {
     if (_kpVal.includes(',')) return;
     if (_kpVal === '') _kpVal = '0';
@@ -1294,10 +1369,10 @@ async function salvaTransazione() {
     const cfg=getConfig();
     if (editingIndex!==null) {
       await apiPatch(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows/itemAt(index=${editingIndex})`,{values:[rowValues]});
-      showToast('Voce aggiornata','success');
+      showToast(`✓ ${tip} · ${fmt(Math.abs(v))} aggiornata`,'success');
     } else {
       await apiPost(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`,{values:[rowValues]});
-      showToast('Transazione salvata','success');
+      showToast(`✓ ${tip} · ${fmt(Math.abs(v))} salvata`,'success');
     }
     invalidateCache();
     editingIndex=null;
@@ -1519,7 +1594,7 @@ const _CHART_DEFAULTS = {
   plugins:{
     legend:{display:false},
     tooltip:{
-      backgroundColor:'#1a1a1a', borderColor:'#2e2e2e', borderWidth:1,
+      backgroundColor:'#2c2c2e', borderColor:'rgba(84,84,88,.6)', borderWidth:1,
       titleColor:'#8a8580', bodyColor:'#f0ece4', padding:12,
       titleFont:{family:"'Courier New',monospace",size:10},
       bodyFont:{family:"'Courier New',monospace",size:11}
@@ -1639,7 +1714,7 @@ function _buildChartCategorie(rows) {
     type:'doughnut',
     data:{
       labels:top.map(([c])=>c),
-      datasets:[{data:top.map(([,v])=>v), backgroundColor:_CHART_PALETTE.slice(0,top.length), borderColor:'#0f0f0f', borderWidth:2, hoverOffset:10}]
+      datasets:[{data:top.map(([,v])=>v), backgroundColor:_CHART_PALETTE.slice(0,top.length), borderColor:'#000', borderWidth:2, hoverOffset:10}]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -2104,6 +2179,79 @@ async function registraCoabIncasso(importo) {
   }
 }
 
+// ── SERVICE WORKER ────────────────────────────────────────────
+let _swRegistration = null;
+
+function initSW() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    _swRegistration = reg;
+    const checkWaiting = () => {
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        document.getElementById('updatePopup').classList.add('show');
+      }
+    };
+    checkWaiting();
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed') checkWaiting();
+      });
+    });
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
+}
+
+function applyUpdate() {
+  if (_swRegistration && _swRegistration.waiting) {
+    _swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  }
+}
+
+async function refreshData() {
+  const btn = document.getElementById('btnRefresh');
+  if (btn) btn.classList.add('spinning');
+  invalidateCache();
+  budgetCache = null; casaCache = null; cfoCache = null; serviziCache = null;
+  try {
+    if (currentPage==='cruscotto')       await loadCruscotto();
+    else if (currentPage==='budget')     await loadBudget();
+    else if (currentPage==='lista')      await renderLista();
+    else if (currentPage==='dash')       await loadDashboard();
+    else if (currentPage==='annuale')    await loadAnnuale();
+    else if (currentPage==='cfo')        await loadCfo();
+    else if (currentPage==='casa')       await loadCasa();
+    else if (currentPage==='servizi')    await loadServizi();
+    else if (currentPage==='grafici')    await loadGrafici();
+    else if (currentPage==='coabitazione') await loadCoabitazione();
+    showToast('Dati aggiornati', 'success');
+  } catch(e) { showToast('Errore aggiornamento', 'error'); }
+  finally { if (btn) setTimeout(() => btn.classList.remove('spinning'), 400); }
+}
+
+let _listaSearch = '';
+function setListaSearch(q) { _listaSearch = q; renderLista(); }
+
+function exportCSV() {
+  const rows = window._listaFiltered || [];
+  if (!rows.length) { showToast('Nessun dato da esportare', 'error'); return; }
+  const header = ['Senso','Categoria','Importo','Cadenza','Descrizione','Metodo','Mezzo','Data','Mese'];
+  const lines = [header.join(';'), ...rows.map(r => [
+    r.senso||'', r.tipologia||'',
+    String(r.valore).replace('.',','),
+    r.cadenza||'', (r.descrizione||'').replace(/;/g,','),
+    r.metodo||'', r.mezzo||'', r.data||'', r.mese||''
+  ].join(';'))];
+  const blob = new Blob(['﻿'+lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `transazioni_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
 async function apriPDFStorico() {
   const {y,m}=coabMese;
   const pad=n=>String(n).padStart(2,'0');
@@ -2121,6 +2269,14 @@ async function apriPDFStorico() {
   }
 }
 </script>
+<!-- UPDATE POPUP -->
+<div id="updatePopup">
+  <div class="update-popup-icon">&#127381;</div>
+  <div class="update-popup-title">Aggiornamento disponibile</div>
+  <div class="update-popup-sub">È pronta una nuova versione dell'app. Aggiorna per continuare ad usarla.</div>
+  <button class="btn-update" onclick="applyUpdate()">Aggiorna ora</button>
+</div>
+
 <!-- RICHIAMA OVERLAY -->
 <div id="richiamaOverlay">
   <div class="richiama-ovl-header">

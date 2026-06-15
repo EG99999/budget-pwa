@@ -1,23 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFD580"/>
-      <stop offset="100%" stop-color="#C97B2E"/>
+      <stop offset="0%" stop-color="#f2a456"/>
+      <stop offset="100%" stop-color="#c97b2e"/>
+    </linearGradient>
+    <linearGradient id="wlt" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.26)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.18)"/>
     </linearGradient>
   </defs>
+  <!-- Background -->
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <!-- Bar 1 -->
-  <rect x="80" y="280" width="88" height="152" rx="14" fill="rgba(255,255,255,0.78)"/>
-  <!-- Bar 2 -->
-  <rect x="212" y="200" width="88" height="232" rx="14" fill="white"/>
-  <!-- Bar 3 -->
-  <rect x="344" y="120" width="88" height="312" rx="14" fill="rgba(255,255,255,0.78)"/>
-  <!-- Trend line -->
-  <polyline points="124,256 256,176 388,96"
-    fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="18"
-    stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Dots -->
-  <circle cx="124" cy="256" r="18" fill="white"/>
-  <circle cx="256" cy="176" r="18" fill="white"/>
-  <circle cx="388" cy="96"  r="18" fill="white"/>
+  <!-- Wallet body -->
+  <rect x="72" y="172" width="368" height="218" rx="32" fill="url(#wlt)"/>
+  <!-- Top stripe -->
+  <rect x="72" y="172" width="368" height="54" rx="32" fill="rgba(0,0,0,0.13)"/>
+  <rect x="72" y="198" width="368" height="28" fill="rgba(0,0,0,0.13)"/>
+  <!-- Card slot -->
+  <rect x="284" y="208" width="118" height="82" rx="16" fill="rgba(255,255,255,0.22)"/>
+  <!-- Card chip -->
+  <rect x="298" y="226" width="30" height="22" rx="5" fill="rgba(255,255,255,0.55)"/>
+  <!-- Card stripe -->
+  <line x1="298" y1="263" x2="386" y2="263" stroke="rgba(255,255,255,0.2)" stroke-width="3" stroke-linecap="round"/>
+  <!-- Euro symbol -->
+  <text x="182" y="316" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="134"
+        fill="rgba(0,0,0,0.38)" text-anchor="middle" dominant-baseline="middle">€</text>
+  <!-- Upward arrow -->
+  <g stroke="rgba(0,0,0,0.52)" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="392" y1="344" x2="392" y2="268"/>
+    <polyline points="368,292 392,266 416,292"/>
+  </g>
 </svg>
