@@ -1,11 +1,11 @@
-const CACHE = 'budget-v2';
+const CACHE = 'budget-v3';
 const SHELL = [
   './',
   './index.html',
   './icon.svg',
   './manifest.json',
   'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
+  'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js'
 ];
 
 self.addEventListener('install', e => {
