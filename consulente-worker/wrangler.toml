@@ -1,0 +1,11 @@
+name = "budget-consulente"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ALLOWED_ORIGIN = "https://eg99999.github.io"
+
+# Segreti (mai qui dentro, si impostano dal terminale):
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#   npx wrangler secret put ALLOWED_EMAIL

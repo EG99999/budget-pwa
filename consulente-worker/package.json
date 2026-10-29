@@ -1,0 +1,11 @@
+{
+  "name": "budget-consulente",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "npx wrangler@4.156.0 deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.135.0"
+  }
+}

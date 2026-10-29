@@ -219,6 +219,23 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .tx-amount{text-align:center;font-size:32px;font-weight:600;letter-spacing:-.02em;margin-top:var(--s1);font-variant-numeric:tabular-nums}
 .tx-desc{text-align:center;margin-bottom:var(--s2);color:var(--text-2)}
 
+/* consulente */
+.msgs{display:flex;flex-direction:column;gap:var(--s2);padding-bottom:var(--s6)}
+.msg{max-width:88%;padding:var(--s1) var(--s2);border-radius:16px;line-height:1.5;overflow-wrap:anywhere}
+.msg.u{align-self:flex-end;background:var(--accent);color:#fff;white-space:pre-wrap}
+.msg.a{align-self:flex-start;background:var(--card)}
+.msg.a.err{color:var(--neg)}
+.msg.a p+p,.msg.a p+ul,.msg.a ul+p,.msg.a ol+p,.msg.a p+ol{margin-top:var(--s1)}
+.msg.a ul,.msg.a ol{padding-left:var(--s3)}
+.msg.a .attesa{display:flex;align-items:center;gap:var(--s1);color:var(--text-2)}
+.msg.a .attesa .spinner{width:16px;height:16px}
+.composer{position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom));z-index:19;display:flex;align-items:flex-end;gap:var(--s1);padding:var(--s1) var(--s2);background:var(--chrome);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border-top:1px solid var(--sep)}
+.composer textarea{flex:1;min-width:0;resize:none;height:40px;max-height:128px;border:0;outline:none;border-radius:16px;background:var(--card);padding:var(--s1) var(--s2);font:inherit;color:var(--text);line-height:24px}
+.composer .send{width:40px;height:40px;border-radius:20px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.composer .send:disabled{background:var(--fill-2);color:var(--text-3)}
+.composer .send svg.i{width:24px;height:24px}
+@media (min-width:960px){.composer{left:264px;bottom:0;padding:var(--s2) var(--s6)}}
+
 .toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:60;background:rgba(44,44,46,.96);color:#fff;font-size:15px;padding:var(--s1) var(--s2);border-radius:24px;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
@@ -557,12 +574,14 @@ const VIEWS = {
   casa:{t:'Casa',r:vCasa,parent:'analisi'},
   abbonamenti:{t:'Abbonamenti',r:vAbbonamenti,parent:'analisi'},
   coab:{t:'Coabitazione',r:vCoab,parent:'analisi'},
+  consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat},
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi'}
 };
 function go(v, anim){ S.view=v; render(anim||'fade', true); window.scrollTo(0,0); }
 let _rid = 0;
 async function render(anim, nuovo){
   const V = VIEWS[S.view], id = ++_rid, c = $('#content');
+  document.querySelectorAll('body > .composer').forEach(e => e.remove());
   $('#nav').innerHTML = `${V.parent?`<button class="nav-back" onclick="go('${V.parent}')">${ico('ChevronLeft')}${VIEWS[V.parent].t}</button>`:'<span></span>'}<span class="nav-title">${V.t}</span><span class="nav-act">${V.act?V.act():''}<button class="icon-btn" id="btnRefresh" aria-label="Aggiorna i dati" onclick="refreshData()">${ico('RefreshCw')}</button></span>`;
   drawTabbar(); drawSide();
   if (nuovo) { c.innerHTML = `<h1 class="lt">${V.t}</h1><div class="loading"><span class="spinner"></span>Caricamento</div>`; watchTitle(); }
@@ -598,7 +617,7 @@ function drawSide(){
     <button class="btn" onclick="openAdd()">${ico('Plus')}Nuova voce</button>
     ${it('oggi','CalendarDays','Oggi')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
     <h3>Analisi</h3>
-    ${it('andamento','ChartColumn','Andamento')}${it('salute','Activity','Salute finanziaria')}${it('casa','House','Casa')}
+    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('salute','Activity','Salute finanziaria')}${it('casa','House','Casa')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}${it('impostazioni','SlidersHorizontal','Impostazioni')}
     <p class="side-foot">${acc&&acc.name?esc(acc.name):''}</p>`;
 }
@@ -774,7 +793,7 @@ async function vAnalisi(){
   const vC = casa.status==='fulfilled' && casa.value.tot ? eur0(casa.value.tot.avg)+' al mese' : '';
   const vA = abb.status==='fulfilled' && abb.value.totMensile ? eur0(abb.value.totMensile)+' al mese' : '';
   return `<h1 class="lt">Analisi</h1>
-  <div class="list">${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}</div>
+  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}</div>
   <h2 class="gh">Spese da seguire</h2>
   <div class="list">${r('casa','House','Casa',vC)}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div>
   <h2 class="gh">App</h2>
@@ -1162,6 +1181,92 @@ async function apriPDFStorico() {
   } catch(e) { toast('PDF non trovato'); }
 }
 
+// ── CONSULENTE (Claude tramite il ponte Cloudflare) ───────────
+const urlConsulente = () => { try { return localStorage.getItem('consulenteUrl') || ''; } catch(e) { return ''; } };
+function salvaUrlConsulente(v){ try { localStorage.setItem('consulenteUrl', v.trim()); } catch(e) {} toast(v.trim() ? 'Indirizzo salvato' : 'Indirizzo tolto'); }
+let CHAT = []; try { CHAT = JSON.parse(localStorage.getItem('consulenteChat')||'[]'); } catch(e) {}
+const salvaChat = () => { try { localStorage.setItem('consulenteChat', JSON.stringify(CHAT.slice(-40))); } catch(e) {} };
+function cancellaChat(){ CHAT = []; salvaChat(); toast('Conversazione cancellata'); if (S.view==='consulente') render(); }
+let _inCorso = false;
+
+function testoRicco(t){
+  const righe = esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').split('\n');
+  let h = '', lista = null;
+  const chiudi = () => { if (lista) { h += `</${lista}>`; lista = null; } };
+  for (const r of righe) {
+    const ul = r.match(/^\s*[-•*]\s+(.*)/), ol = r.match(/^\s*\d+[.)]\s+(.*)/), tit = r.match(/^#{1,6}\s+(.*)/);
+    if (ul || ol) { const tipo = ul ? 'ul' : 'ol'; if (lista!==tipo) { chiudi(); h += `<${tipo}>`; lista = tipo; } h += `<li>${(ul||ol)[1]}</li>`; }
+    else { chiudi(); if (tit) h += `<p><b>${tit[1]}</b></p>`; else if (r.trim()) h += `<p>${r}</p>`; }
+  }
+  chiudi();
+  return h;
+}
+async function datiConsulente(){
+  const rows = await getTransazioni();
+  const [bud, cfo, casa, abb] = await Promise.allSettled([getBudget(), getCfo(), getCasa(), getAbbonamenti()]);
+  const riga = a => a.map(v => String(v??'').replace(/[;\n]/g,',')).join(';');
+  const blocco = (titolo, M) => M && M.length ? `\n\n${titolo}\n` + M.filter(r=>r.some(v=>v!==''&&v!=null)).map(riga).join('\n') : '';
+  let t = 'MOVIMENTI (data;senso;categoria;importo in euro, negativo = uscita;cadenza;metodo;mezzo;descrizione)\n'
+    + [...rows].sort((a,b)=>a._index-b._index).map(r=>riga([r.data,r.senso,r.tipologia,r.valore,r.cadenza,r.metodo,r.mezzo,r.descrizione])).join('\n');
+  if (bud.status==='fulfilled') t += blocco('BUDGET MASTER (categoria;gruppo;gennaio…dicembre;totale anno)', bud.value.cats.map(x=>[x.cat,x.g,...x.m,x.a]));
+  if (cfoCache) t += blocco('ANALISI CFO (foglio Excel)', cfoCache);
+  if (casaCache) t += blocco('PANNELLO CASA (foglio Excel)', casaCache);
+  if (serviziCache) t += blocco('SPESE RICORRENTI (foglio Excel)', serviziCache);
+  return t + `\n\nOggi è ${giornoLungo(oggiIso())} ${new Date().getFullYear()}.`;
+}
+function vConsulente(){
+  const url = urlConsulente(), m = new Date().getMonth();
+  if (!url) return `<h1 class="lt">Consulente</h1>
+    <section class="card"><p>Il consulente usa Claude per analizzare i tuoi movimenti e aiutarti a risparmiare.</p>
+    <p class="note" style="margin:8px 0 16px">Prima va collegato il ponte Cloudflare che custodisce la chiave API. Quando è pronto, incolla il suo indirizzo nelle Impostazioni.</p>
+    <button class="btn soft" onclick="go('impostazioni','push')">Apri le Impostazioni</button></section>`;
+  const prop = ['Dove posso risparmiare questo mese?', `Com'è andato ${mese(m).toLowerCase()} rispetto a ${mese((m+11)%12).toLowerCase()}?`, 'Quali spese ricorrenti potrei tagliare?', "Riuscirò a rispettare il budget dell'anno?"];
+  const vuota = !CHAT.length;
+  return `<h1 class="lt">Consulente</h1>
+  ${vuota?`<p class="muted" style="margin-bottom:16px">Chiedi quello che vuoi sulle tue spese: risponde partendo dai dati del file Excel.</p>
+    <div class="list">${prop.map(p=>`<button class="row" onclick='chiedi(${JSON.stringify(p)})'><span class="ic">${ico('MessageCircle')}</span><span class="row-main">${esc(p)}</span>${chev()}</button>`).join('')}</div>
+    <p class="note">Le domande e i dati del file, movimenti compresi, vengono inviati a Claude di Anthropic tramite il tuo ponte Cloudflare.</p>`:''}
+  <div class="msgs" id="msgs">${CHAT.map(x=>`<div class="msg ${x.role==='user'?'u':'a'}">${x.role==='user'?esc(x.content):testoRicco(x.content)}</div>`).join('')}</div>
+  <div class="composer"><textarea id="domanda" rows="1" placeholder="Scrivi una domanda" aria-label="Domanda per il consulente" oninput="this.style.height='40px';this.style.height=Math.min(this.scrollHeight,128)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chiedi()}"></textarea><button class="send" id="btnInvia" onclick="chiedi()" aria-label="Invia" ${_inCorso?'disabled':''}>${ico('ArrowUp')}</button></div>`;
+}
+function fineChat(){
+  const c = $('#content .composer'); if (c) document.body.appendChild(c); // fuori dal contenuto animato, resta ancorata in basso
+  if ($('#msgs') && CHAT.length) window.scrollTo(0, document.body.scrollHeight);
+}
+async function chiedi(testo){
+  const ta = $('#domanda'), q = (testo || (ta ? ta.value : '')).trim();
+  if (!q || _inCorso) return;
+  _inCorso = true;
+  CHAT.push({role:'user', content:q}); salvaChat();
+  await render();
+  const box = document.createElement('div'); box.className = 'msg a';
+  box.innerHTML = '<span class="attesa"><span class="spinner"></span>Sto guardando i tuoi dati</span>';
+  $('#msgs').appendChild(box); fineChat();
+  let out = '';
+  try {
+    const dati = await datiConsulente();
+    await getToken();
+    const res = await fetch(urlConsulente(), { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ dati, messages: CHAT }) });
+    if (!res.ok) throw new Error(res.status===403 ? 'Il ponte non riconosce il tuo account Microsoft.' : (await res.text()) || ('Errore '+res.status));
+    const rd = res.body.getReader(), dec = new TextDecoder();
+    for (;;) {
+      const {done, value} = await rd.read(); if (done) break;
+      out += dec.decode(value, {stream:true});
+      if (box.isConnected) { box.innerHTML = testoRicco(out); fineChat(); }
+    }
+    if (!out.trim()) throw new Error('Risposta vuota dal consulente.');
+    CHAT.push({role:'assistant', content:out}); salvaChat();
+  } catch(e) {
+    CHAT.pop(); salvaChat();
+    box.classList.add('err'); box.textContent = 'Non sono riuscito a rispondere: ' + (e.message || e);
+    const t2 = $('#domanda'); if (t2) t2.value = q;
+  } finally {
+    _inCorso = false;
+    const b = $('#btnInvia'); if (b) b.disabled = false;
+    const t = $('#domanda'); if (t && !t.value) t.focus();
+  }
+}
+
 // ── IMPOSTAZIONI ──────────────────────────────────────────────
 async function vImpost(){
   const cfg = getConfig() || {}, acc = msalInstance.getActiveAccount();
@@ -1175,6 +1280,12 @@ async function vImpost(){
     <button class="row link" onclick="refreshData()">Aggiorna i dati adesso</button>
     <button class="row link" onclick="mostraSetup()">Collega un altro file</button>
   </div>
+  <h2 class="gh">Consulente</h2>
+  <div class="list plain">
+    <label class="row"><span>Indirizzo del ponte</span><input class="field" type="url" inputmode="url" placeholder="https://…workers.dev" value="${esc(urlConsulente())}" onchange="salvaUrlConsulente(this.value)" aria-label="Indirizzo del ponte Cloudflare"></label>
+    <button class="row link" onclick="cancellaChat()">Cancella la conversazione</button>
+  </div>
+  <p class="note">L'indirizzo del ponte Cloudflare non è segreto: la chiave API resta su Cloudflare.</p>
   <h2 class="gh">Account</h2>
   <div class="list plain">
     <div class="row"><span class="ic">${ico('Users')}</span><span class="row-main"><span class="row-title">${esc(acc&&acc.name||'')}</span><span class="row-sub">${esc(acc&&acc.username||'Account Microsoft')}</span></span></div>
