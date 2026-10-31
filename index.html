@@ -1182,7 +1182,8 @@ async function apriPDFStorico() {
 }
 
 // ── CONSULENTE (Claude tramite il ponte Cloudflare) ───────────
-const urlConsulente = () => { try { return localStorage.getItem('consulenteUrl') || ''; } catch(e) { return ''; } };
+const PONTE = 'https://budget-consulente.elia-coach.workers.dev';
+const urlConsulente = () => { try { return localStorage.getItem('consulenteUrl') || PONTE; } catch(e) { return PONTE; } };
 function salvaUrlConsulente(v){ try { localStorage.setItem('consulenteUrl', v.trim()); } catch(e) {} toast(v.trim() ? 'Indirizzo salvato' : 'Indirizzo tolto'); }
 let CHAT = []; try { CHAT = JSON.parse(localStorage.getItem('consulenteChat')||'[]'); } catch(e) {}
 const salvaChat = () => { try { localStorage.setItem('consulenteChat', JSON.stringify(CHAT.slice(-40))); } catch(e) {} };

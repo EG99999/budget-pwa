@@ -1,3 +1,4 @@
 consulente-worker/node_modules/
 consulente-worker/.wrangler/
 consulente-worker/.dev.vars
+*.txt
