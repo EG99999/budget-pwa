@@ -163,10 +163,15 @@ async function estratto(body, env) {
   if (!cats.length) throw new ErroreLettura("Mancano le categorie del bilancio.");
   let file;
   if (body.tipo === "pdf" && typeof body.dati === "string" && body.dati) file = { type: "document", source: { type: "base64", media_type: "application/pdf", data: body.dati } };
+  else if (body.tipo === "immagini" && Array.isArray(body.dati) && body.dati.some(x => typeof x === "string" && x)) {
+    // screenshot dell'app della banca: possono sovrapporsi, i doppioni li toglie Claude
+    file = [...body.dati.filter(x => typeof x === "string" && x).slice(0, 20).map(data => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } })),
+      { type: "text", text: "Sono screenshot dell'estratto conto, in ordine. Se due screenshot si sovrappongono, un movimento ripetuto (stessa data, importo e descrizione nello stesso punto dell'elenco) va contato una volta sola." }];
+  }
   else if (body.tipo === "testo" && typeof body.dati === "string" && body.dati.trim()) file = { type: "text", text: "ESTRATTO CONTO (testo del file):\n" + body.dati.slice(0, MAX_DATI) };
   else throw new ErroreLettura("Manca il file dell'estratto conto.");
   return leggi(env, SYSTEM_ESTRATTO, [
-    file,
+    ...(Array.isArray(file) ? file : [file]),
     { type: "text", text: `ESEMPI dalle voci già registrate (descrizione | categoria):\n${elenco(body.esempi, 300) || "nessuno"}` },
   ], schemaEstratto(cats), "low", 64000);
 }

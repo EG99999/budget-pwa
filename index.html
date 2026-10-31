@@ -251,6 +251,7 @@ button.row:disabled{cursor:default}
 .edit .btn{height:40px;font-size:15px}
 select.pick{appearance:none;-webkit-appearance:none;border:0;background:none;color:var(--accent-text);font-size:13px;padding:0;cursor:pointer;max-width:100%}
 .hero .score{margin-bottom:var(--s1)}
+.side-anni{margin:0 0 var(--s2);flex-wrap:wrap}.side-anni .chip{height:28px;padding:0 var(--s1);font-size:13px}
 .hero .foot b.neg{color:var(--neg)}.hero .foot b.pos{color:var(--pos)}.hero .foot .row-line+.row-line{margin-top:var(--s1)}
 
 /* tastiera esterna */
@@ -614,7 +615,9 @@ function startApp() {
   document.getElementById('app').style.display         = 'block';
   initCoabStorico();
   initSW();
+  const t = oggiApp(); S.movM = {y:t.getFullYear(), m:t.getMonth()}; S.budM = {y:t.getFullYear(), m:t.getMonth()};
   go(S.view);
+  anniDisponibili().then(() => drawSide()).catch(() => {});
 }
 
 // ── GRAPH API ─────────────────────────────────────────────────
@@ -653,22 +656,25 @@ async function readRange(sheetName, address) {
 let cachedRows = null, cacheTime = 0;
 let budgetCache = null, casaCache = null, cfoCache = null, serviziCache = null;
 
-async function getTransazioni() {
-  const now = Date.now();
-  if (cachedRows && now-cacheTime < 60000) return cachedRows;
-  const cfg = getConfig();
-  const data = await apiGet(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`);
-  cachedRows = (data.value||[]).map(r=>({
+async function righeDelFile(fileId, tabella){
+  const data = await apiGet(`/me/drive/items/${fileId}/workbook/tables/${tabella||'TblTransazioni'}/rows`);
+  return (data.value||[]).map(r=>({
     _index:r.index, senso:r.values[0][0], tipologia:r.values[0][1],
     valore:parseFloat(r.values[0][2])||0, cadenza:r.values[0][3],
     descrizione:r.values[0][4], metodo:r.values[0][5],
     mezzo:r.values[0][6], data:parseDate(r.values[0][7]), mese:r.values[0][8]
-  })).filter(r=>r.valore!==0);
+  })).filter(r=>r.valore!==0 && (!r.senso || /^(USCITA|ENTRATA)$/i.test(String(r.senso).trim())));
+}
+async function getTransazioni() {
+  const now = Date.now();
+  if (cachedRows && now-cacheTime < 60000) return cachedRows;
+  const cfg = getConfig();
+  cachedRows = await righeDelFile(cfg.fileId, cfg.tableName);
   cacheTime = now;
   return cachedRows;
 }
 function invalidateCache() { cachedRows=null; cacheTime=0; }
-function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; }
+function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; }
 
 async function getBudget() {
   if (!budgetCache) { const d = await readRange('BUDGET MASTER','B4:R32'); budgetCache = d.values; }
@@ -712,8 +718,12 @@ const oggiIso = () => isoDi(new Date());
 function giornoLungo(iso) { const [y,m,d]=String(iso).split('-').map(Number); return frase(new Date(y,m-1,d).toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'})); }
 function giornoBreve(iso) { const [y,m,d]=String(iso).split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('it-IT',{day:'numeric',month:'long'}); }
 function formatDate(raw){ if(!raw)return''; try{return new Date(raw).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});}catch{return raw;} }
-const uscite  = L => L.filter(r=>r.valore<0).reduce((s,r)=>s-r.valore,0);
-const entrate = L => L.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
+// gli investimenti non sono spese né guadagni: soldi spostati che restano tuoi (Elia 31/10)
+const investimento = r => String(r.tipologia||'').trim().toUpperCase() === 'INVESTIMENTI';
+const spesa = r => r.valore < 0 && !investimento(r);
+const uscite  = L => L.filter(spesa).reduce((s,r)=>s-r.valore,0);
+const entrate = L => L.filter(r=>r.valore>0 && !investimento(r)).reduce((s,r)=>s+r.valore,0);
+const investito = L => -L.filter(investimento).reduce((s,r)=>s+r.valore,0);
 function perCat(L){ const o={}; L.forEach(r=>{const c=r.tipologia||'ALTRO'; o[c]=(o[c]||0)+r.valore;}); return o; }
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2600); }
 const chev = () => ico('ChevronRight','chev');
@@ -783,6 +793,7 @@ const VIEWS = {
   coab:{t:'Coabitazione',r:vCoab,parent:'analisi',w:'stretto'},
   consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,w:'stretto',act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi',w:'stretto'},
+  anni:{t:'Negli anni',r:vAnni,parent:'analisi'},
   uniforma:{t:'Uniforma',r:vUniforma,parent:'analisi',w:'stretto'},
   estratto:{t:'Estratto conto',r:vEstratto,parent:'analisi',w:'stretto'},
   scontrini:{t:'Scontrini',r:vScontrini,parent:'analisi',after:dopoScontrini,w:'stretto'},
@@ -840,6 +851,7 @@ async function render(anim, nuovo){
   catch(e) { html = `<h1 class="lt">${V.t}</h1><div class="card"><p>Non riesco a leggere i dati dal file Excel.</p><p class="note" style="margin:8px 0 16px">${esc(String(e.message).slice(0,200))}</p><button class="btn soft" onclick="refreshData()">Riprova</button></div>`; }
   if (id !== _rid) return;
   c.innerHTML = html;
+  const ban = bannerAnno(); if (ban) { const h1 = c.querySelector('h1.lt'); if (h1) h1.insertAdjacentHTML('afterend', ban); else c.insertAdjacentHTML('afterbegin', ban); }
   c.className = 'content' + (V.w ? ' '+V.w : '');
   if (anim) { void c.offsetWidth; c.classList.add({push:'in-push', avanti:'in-avanti', indietro:'in-indietro'}[anim] || 'in-fade'); }
   if (V.after) V.after();
@@ -865,11 +877,13 @@ function drawSide(){
   const tasto = {oggi:'1',movimenti:'2',budget:'3',consulente:'C'};
   const it = (v,i,l) => `<button class="side-item ${S.view===v?'on':''}" onclick="go('${v}')" ${tasto[v]?`title="${l} (tasto ${tasto[v]})" aria-keyshortcuts="${tasto[v]}"`:''}>${ico(i)}${l}</button>`;
   const acc = msalInstance.getActiveAccount();
+  const anni = elencoAnni(), aa = annoFile();
   $('#side').innerHTML = `<div class="side-head"><span class="app-ic">${ico('Wallet')}</span>Budget</div>
+    ${anni.length > 1 ? `<div class="chips side-anni" role="group" aria-label="Anno">${anni.map(y => `<button class="chip ${+y===aa?'on':''}" onclick="cambiaAnno(${y})" aria-pressed="${+y===aa}">${y}</button>`).join('')}</div>` : ''}
     <button class="btn" onclick="openAdd()" title="Nuova voce (tasto N)" aria-keyshortcuts="N">${ico('Plus')}Nuova voce</button>
     ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
     <h3>Analisi</h3>
-    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}
+    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('anni','History','Negli anni')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}
     <h3>Importa</h3>
     ${it('estratto','FileUp','Estratto conto')}${it('scontrini','ReceiptText','Scontrini')}${it('prezzi','ChartLine','Prezzi')}
@@ -940,11 +954,11 @@ async function vOggi(){
   const rows = await getTransazioni();
   const [rb, rc, ra] = await Promise.allSettled([getBudget(), getCfo(), getAbbonamenti()]);
   const bud = rb.status==='fulfilled' ? rb.value : null, cfo = rc.status==='fulfilled' ? rc.value : null, abb = ra.status==='fulfilled' ? ra.value : null;
-  const t = new Date(), y = t.getFullYear(), m = t.getMonth(), gg = t.getDate(), dim = new Date(y,m+1,0).getDate(), f = gg/dim, fa = (m+f)/12;
+  const t = oggiApp(), y = t.getFullYear(), m = t.getMonth(), gg = t.getDate(), dim = new Date(y,m+1,0).getDate(), f = gg/dim, fa = (m+f)/12;
 
   // l'anno: situazione iniziale contro oggi
-  const Yr = rows.filter(r=>String(r.data||'').startsWith(y)), Ey = entrate(Yr), Uy = uscite(Yr), catY = perCat(Yr.filter(r=>r.valore<0));
-  const mesi = []; for (let i=0;i<=m;i++) { const Lm = Yr.filter(r=>sameYM(r.data,y,i)); mesi.push({i, U:uscite(Lm), E:entrate(Lm), cat:perCat(Lm.filter(r=>r.valore<0))}); }
+  const Yr = rows.filter(r=>String(r.data||'').startsWith(y)), Ey = entrate(Yr), Uy = uscite(Yr), catY = perCat(Yr.filter(spesa)), invY = investito(Yr);
+  const mesi = []; for (let i=0;i<=m;i++) { const Lm = Yr.filter(r=>sameYM(r.data,y,i)); mesi.push({i, U:uscite(Lm), E:entrate(Lm), cat:perCat(Lm.filter(spesa))}); }
   const pIni = cfo && cfo.params.find(p=>/liquidit.*iniziale/i.test(p.l));
   const base = pIni && typeof pIni.v==='number' ? pIni.v : null, b0 = base||0;
   let acc = b0; const punti = mesi.map(x => ({ x: x.i===m ? m+f : x.i+1, v: acc += x.E - x.U }));
@@ -954,16 +968,17 @@ async function vOggi(){
     : tono==='perdita' ? `Da inizio anno sei in <b class="neg">perdita di ${eur0(-saldoY)}</b>.` : `Da inizio anno sei <b>in pari</b>.`;
   const heroAnno = `<section class="card hero" aria-label="L'anno in breve">
     <p class="lead">${verdetto}</p>
-    <p class="muted" style="margin-top:8px">${base!=null ? `Avevi <b class="num">${eur0(base)}</b> il 1° gennaio, oggi ne hai <b class="num">${eur0(b0+saldoY)}</b>.` : `Entrate ${eur0(Ey)}, uscite ${eur0(Uy)}.`}</p>
+    <p class="muted" style="margin-top:8px">${base!=null ? `Avevi <b class="num">${eur0(base)}</b> il 1° gennaio, oggi tra conto e investimenti ne hai <b class="num">${eur0(b0+saldoY)}</b>.` : `Entrate ${eur0(Ey)}, uscite ${eur0(Uy)}.`}</p>
+    ${invY ? `<p class="muted" style="margin-top:8px">${invY > 0 ? `Hai investito <b class="num">${eur0(invY)}</b>: non conta come spesa, restano soldi tuoi.` : `Hai ritirato <b class="num">${eur0(-invY)}</b> dagli investimenti: non conta come guadagno.`}</p>` : ''}
     <div style="margin-top:16px">${annoChart(punti, b0, y, tono)}</div>
-    <div class="key"><span style="--c:${tono==='crescita'?'var(--bar-ok)':tono==='perdita'?'var(--bar-over)':'var(--line-1)'}"><i></i>${base!=null?'Soldi disponibili':'Saldo da inizio anno'}</span><span style="--c:var(--text-3)"><i></i>1° gennaio</span></div>
+    <div class="key"><span style="--c:${tono==='crescita'?'var(--bar-ok)':tono==='perdita'?'var(--bar-over)':'var(--line-1)'}"><i></i>${base!=null?'Conto e investimenti':'Saldo da inizio anno'}</span><span style="--c:var(--text-3)"><i></i>1° gennaio</span></div>
   </section>`;
 
   // cosa si può fare: rimedi con il loro valore in euro
   const rimedi = [];
   const mesiRestanti = Math.max(12 - (m+f), 0.5);
   if (tono==='perdita') rimedi.push({v:1e9, t:`Per tornare in pari entro dicembre servono circa <b class="num">${eur0(-saldoY/mesiRestanti)} al mese</b> in meno di uscite, o in più di entrate.`});
-  if (bud) bud.cats.filter(x=>x.g!=='Entrate' && x.a>0).forEach(x => {
+  if (bud) bud.cats.filter(x=>x.g!=='Entrate' && x.cat!=='INVESTIMENTI' && x.a>0).forEach(x => {
     const speso = Math.abs(catY[x.cat]||0), atteso = x.a*fa, oltre = speso - atteso;
     if (oltre > Math.max(50, atteso*0.05)) {
       const resto = (x.a - speso)/mesiRestanti;
@@ -1013,7 +1028,7 @@ async function vOggi(){
   } else hero = `<p class="lead">Hai speso <b class="num">${eur0(U)}</b> questo mese.</p>`;
   let watch = '';
   if (bud) {
-    const w = bud.cats.filter(x=>x.g!=='Entrate').map(x=>({c:x.cat, s:Math.abs(act[x.cat]||0), b:x.m[m]}))
+    const w = bud.cats.filter(x=>x.g!=='Entrate' && x.cat!=='INVESTIMENTI').map(x=>({c:x.cat, s:Math.abs(act[x.cat]||0), b:x.m[m]}))
       .filter(o=>o.s>0 && tonoBudget(o.b>0?o.s/o.b:2, f, false)!=='ok').sort((a,b)=>(b.s-b.b)-(a.s-a.b)).slice(0,6);
     watch = `<h2 class="gh">Da tenere d'occhio</h2>` + (w.length
       ? `<div class="list">${w.map(o=>budRow(o.c,o.s,o.b,f,false,{per:'mese',y,m})).join('')}</div><p class="note">La tacca indica il giorno di oggi: se la barra la supera, stai spendendo più in fretta del previsto.</p>`
@@ -1103,18 +1118,18 @@ function exportCSV() {
 // ── BUDGET ────────────────────────────────────────────────────
 async function vBudget(){
   const rows = await getTransazioni(), bud = await getBudget();
-  const t = new Date(), annoCorr = t.getFullYear(), meseV = S.bud==='mese';
+  const t = oggiApp(), annoCorr = t.getFullYear(), meseV = S.bud==='mese';
   const {m} = S.budM, y = annoCorr;
   const dim = new Date(y,m+1,0).getDate();
   const tick = meseV ? (m===t.getMonth() ? t.getDate()/dim : null) : (t.getMonth() + t.getDate()/new Date(y,t.getMonth()+1,0).getDate())/12;
   const act = perCat(meseV ? rows.filter(r=>sameYM(r.data,y,m)) : rows.filter(r=>String(r.data||'').startsWith(y)));
   const val = x => Math.abs(act[x.cat]||0), bb = x => meseV ? x.m[m] : x.a;
-  const usc = bud.cats.filter(x=>x.g!=='Entrate');
+  const usc = bud.cats.filter(x=>x.g!=='Entrate' && x.cat!=='INVESTIMENTI');
   const totS = usc.reduce((s,x)=>s+val(x),0), totB = usc.reduce((s,x)=>s+bb(x),0);
   const gruppi = [...new Set(bud.cats.map(x=>x.g))].map(g => {
     const cs = bud.cats.filter(x=>x.g===g && (bb(x)>0 || val(x)>0));
     if (!cs.length) return '';
-    return `<section class="blocco"><h2 class="gh">${esc(g)}</h2><div class="list">${cs.map(x=>budRow(x.cat,val(x),bb(x),g==='Entrate'?null:tick,g==='Entrate',{per:meseV?'mese':'anno',y,m})).join('')}</div></section>`;
+    return `<section class="blocco"><h2 class="gh">${esc(g)}</h2><div class="list">${cs.map(x=>{ const ent = g==='Entrate' || x.cat==='INVESTIMENTI'; return budRow(x.cat,val(x),bb(x),ent?null:tick,ent,{per:meseV?'mese':'anno',y,m}); }).join('')}</div></section>`;
   }).join('');
   const idx = meseV ? m+1 : 13, tv = k => bud.tot[k] ? parseFloat(bud.tot[k][idx])||0 : null;
   const prev = [['Entrate previste',tv('TOT ENTRATE')],['Uscite previste',tv('TOT USCITE')],['Saldo previsto',tv('SALDO')]].filter(x=>x[1]!=null);
@@ -1141,7 +1156,7 @@ async function vAnalisi(){
   return `<h1 class="lt">Analisi</h1>
   <div class="gruppi">
   <section class="blocco"><h2 class="gh">Capire le spese</h2>
-  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}${r('uniforma','Combine','Uniforma le voci','')}</div></section>
+  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('anni','History','Negli anni','')}${r('salute','Activity','Salute finanziaria',vS)}${r('uniforma','Combine','Uniforma le voci','')}</div></section>
   <section class="blocco"><h2 class="gh">Spese da seguire</h2>
   <div class="list">${r('casa','House','Casa',vC)}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
   <section class="blocco"><h2 class="gh">Importa</h2>
@@ -1167,14 +1182,14 @@ function lineChart(U, E, sel, y){
   return s + '</svg>';
 }
 async function vAndamento(){
-  const rows = await getTransazioni(), t = new Date(), y = t.getFullYear();
+  const rows = await getTransazioni(), t = oggiApp(), y = t.getFullYear();
   let body = '';
   if (S.chart==='mesi') {
     const U=[], E=[];
     for (let m=0;m<12;m++){ const mt=rows.filter(r=>sameYM(r.data,y,m)); U.push(mt.length?uscite(mt):null); E.push(mt.length?entrate(mt):null); }
     if (U[S.chartSel]==null) S.chartSel = t.getMonth();
     const i = S.chartSel, mt = rows.filter(r=>sameYM(r.data,y,i)), saldo = (E[i]||0)-(U[i]||0);
-    const top = Object.entries(perCat(mt.filter(r=>r.valore<0))).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]).slice(0,6), mx = top.length?top[0][1]:1;
+    const top = Object.entries(perCat(mt.filter(spesa))).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]).slice(0,6), mx = top.length?top[0][1]:1;
     body = `<div class="cols"><div><div class="card">${lineChart(U,E,i,y)}<div class="key"><span style="--c:var(--line-1)"><i></i>Uscite</span><span style="--c:var(--line-2)"><i></i>Entrate</span></div></div>
     <p class="note">Tocca un mese sul grafico per vederne il dettaglio.</p></div><div>
     <h2 class="gh">${mese(i)} ${y}</h2>
@@ -1186,7 +1201,7 @@ async function vAndamento(){
     ${top.length?`<h2 class="gh">Categorie più alte</h2><div class="list">${top.map(([c,v])=>`<button class="hbar" onclick="apriCategoria(${esc(JSON.stringify(c))},'mese',${y},${i})"><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></button>`).join('')}</div>`:''}</div></div>`;
   } else if (S.chart==='categorie') {
     const meseV = S.catPer==='mese';
-    const src = rows.filter(r=>r.valore<0 && (meseV ? sameYM(r.data,y,t.getMonth()) : String(r.data||'').startsWith(y)));
+    const src = rows.filter(r=>spesa(r) && (meseV ? sameYM(r.data,y,t.getMonth()) : String(r.data||'').startsWith(y)));
     const L = Object.entries(perCat(src)).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]);
     const tot = L.reduce((s,x)=>s+x[1],0), mx = L.length?L[0][1]:1;
     body = `<div class="chips">${[['mese',mese(t.getMonth())],['anno','Anno '+y]].map(([v,l])=>`<button class="chip ${S.catPer===v?'on':''}" onclick="S.catPer='${v}';render()">${l}</button>`).join('')}</div>
@@ -1194,7 +1209,7 @@ async function vAndamento(){
     <p class="note">Tocca una categoria per vederne i movimenti.</p>`;
   } else {
     const bud = await getBudget(), m = t.getMonth(), act = perCat(rows.filter(r=>sameYM(r.data,y,m)));
-    const L = bud.cats.filter(x=>x.g!=='Entrate').map(x=>({c:x.cat, d:Math.abs(act[x.cat]||0)-x.m[m], b:x.m[m]})).filter(o=>o.d!==0).sort((a,b)=>b.d-a.d);
+    const L = bud.cats.filter(x=>x.g!=='Entrate' && x.cat!=='INVESTIMENTI').map(x=>({c:x.cat, d:Math.abs(act[x.cat]||0)-x.m[m], b:x.m[m]})).filter(o=>o.d!==0).sort((a,b)=>b.d-a.d);
     const mx = Math.max(1,...L.map(o=>Math.abs(o.d)));
     body = `<p class="note" style="margin:0 0 16px">${mese(m)}: a destra le categorie oltre il budget, a sinistra quelle con margine.</p><div class="list">${L.map(o=>{
       const w = Math.abs(o.d)/mx*42, over = o.d>0;
@@ -1738,7 +1753,7 @@ async function vEstratto(){
   return titolo + `
   <p class="muted" style="margin-bottom:16px">Carica l'estratto scaricato dalla banca: confronto ogni movimento con il file Excel e ti dico cosa manca, cosa è diverso e cosa è segnato solo nell'app.</p>
   ${seg([['conto','Conto corrente'],['carta','Carta di credito']], ES.tipo, 'setTipoEstratto')}
-  <label class="drop">${ico('FileUp')}<b>Scegli il file</b><span>PDF, Excel o CSV</span><input type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf" onchange="leggiEstratto(this.files[0]);this.value=''"></label>
+  <label class="drop">${ico('FileUp')}<b>Scegli il file</b><span>PDF, Excel, CSV o screenshot dell'app della banca</span><input type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" multiple onchange="leggiEstratto(this.files);this.value=''"></label>
   ${ES.errore?`<p class="avviso">${ico('TriangleAlert')}<span>${esc(ES.errore)}</span></p>`:''}
   <p class="note">Il file viene letto da Claude di Anthropic tramite il tuo ponte (pochi centesimi a estratto) e non viene salvato da nessuna parte. Nel file Excel non cambia nulla finché non confermi tu.</p>`;
 }
@@ -1797,12 +1812,17 @@ function movimentiDaTabella(R){
   }
   return null;
 }
-async function leggiEstratto(file){
-  if (!file) return;
-  const pdf = /\.pdf$/i.test(file.name) || file.type==='application/pdf';
-  if (!pdf && !/\.(xlsx|xls|csv)$/i.test(file.name)) { ES.errore = 'Formato non riconosciuto: usa un PDF, un Excel o un CSV.'; render(); return; }
-  if (file.size > 25e6) { ES.errore = 'Il file supera i 25 MB: scarica un periodo più corto.'; render(); return; }
-  ES = { fase:'lettura', tipo:ES.tipo, nome:file.name };
+async function leggiEstratto(scelti){
+  const tutti = scelti instanceof File ? [scelti] : [...(scelti||[])];
+  if (!tutti.length) return;
+  // screenshot dall'app della banca: uno o più, letti da Claude
+  const foto = tutti.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+  const file = tutti[0], pdf = !foto.length && (/\.pdf$/i.test(file.name) || file.type==='application/pdf');
+  if (!foto.length && !pdf && !/\.(xlsx|xls|csv)$/i.test(file.name)) { ES.errore = 'Formato non riconosciuto: usa un PDF, un Excel, un CSV o degli screenshot.'; render(); return; }
+  if (!foto.length && file.size > 25e6) { ES.errore = 'Il file supera i 25 MB: scarica un periodo più corto.'; render(); return; }
+  if (foto.length > 20) { ES.errore = 'Al massimo 20 screenshot alla volta.'; render(); return; }
+  const nomeFile = foto.length ? (foto.length === 1 ? '1 screenshot' : foto.length + ' screenshot') : file.name;
+  ES = { fase:'lettura', tipo:ES.tipo, nome:nomeFile };
   if (S.view==='estratto') render();
   try {
     const rows = await getTransazioni();
@@ -1810,9 +1830,11 @@ async function leggiEstratto(file){
     for (const r of [...rows].reverse()) { const d = String(r.descrizione||'').trim(); if (d && r.tipologia && !visti.has(d)) { visti.add(d); esempi.push(`${d} | ${r.tipologia}`); } if (esempi.length >= 300) break; }
     // Excel e CSV: colonne lette qui, a Claude vanno solo i movimenti da aggiungere; PDF e tabelle sconosciute li legge Claude
     let mov = null, conto = '', costo = 0;
-    if (!pdf) mov = movimentiDaTabella(await righeDaFile(file));
+    if (!pdf && !foto.length) mov = movimentiDaTabella(await righeDaFile(file));
     if (!mov) {
-      const j = await leggiConClaude('/estratto', {...(pdf ? {tipo:'pdf', dati: await aBase64(file)} : {tipo:'testo', dati: await testoDaFile(file)}), categorie: tutteCat(rows), esempi});
+      const corpo = foto.length ? {tipo:'immagini', dati: await Promise.all((await Promise.all(foto.map(comprimi))).flatMap(f => f.pezzi).slice(0, 20).map(aBase64))}
+        : pdf ? {tipo:'pdf', dati: await aBase64(file)} : {tipo:'testo', dati: await testoDaFile(file)};
+      const j = await leggiConClaude('/estratto', {...corpo, categorie: tutteCat(rows), esempi});
       mov = (j.movimenti||[]).filter(m => isoValida(m.data) && m.importo).map(m => ({...m, pronto:true}));
       conto = j.conto; costo = j.costo || 0;
     }
@@ -1828,7 +1850,7 @@ async function leggiEstratto(file){
         (j.voci||[]).forEach(v => { const m = parte[v.n - 1]; if (m) Object.assign(m, {descrizione:v.descrizione || m.descrizione, cat:v.categoria, mezzo:v.mezzo, tipo:v.tipo, sel: v.tipo === 'normale' && !m.annulla && !m.dentro, pronto:true}); });
       } catch(e) { ES.avviso = 'Nomi e categorie non proposti (' + e.message + '): scegli tu la categoria.'; }
     }
-    ES = { fase:'risultato', tipo:ES.tipo, nome:file.name, conto, costo, avviso:ES.avviso, r, aperti:{} };
+    ES = { fase:'risultato', tipo:ES.tipo, nome:nomeFile, conto, costo, avviso:ES.avviso, r, aperti:{} };
     if (S.view!=='estratto') toast('Estratto letto: aprilo da Analisi');
   } catch(e) {
     ES = { fase:'scelta', tipo:ES.tipo, errore: 'Non sono riuscito a leggerlo: ' + (e.message || e) };
@@ -2412,12 +2434,104 @@ async function applicaGruppo(i){
   g.busy = false; render();
 }
 
+// ── ANNI: un file per anno (COSTI ANNUALI AAAA.xlsm), si sceglie quale guardare; "Negli anni" li confronta tutti
+const annoReale = () => new Date().getFullYear();
+// per un anno passato l'app ragiona come al 31 dicembre: anno chiuso, niente ritmo del mese in corso
+function oggiApp(){ const a = annoFile(), r = new Date(); return a < r.getFullYear() ? new Date(a, 11, 31, 12) : r; }
+async function anniDisponibili(forza){
+  const cfg = getConfig(); if (!cfg) return {};
+  if (!forza && cfg.anni && Date.now() - (cfg.anniT||0) < 10*60*1000) return cfg.anni;
+  const cartella = cartellaFile().split('/').map(encodeURIComponent).join('/');
+  const d = await apiGet(`/me/drive/root:/${cartella}:/children?$select=name,id&$top=200`);
+  const anni = {};
+  for (const f of d.value||[]) { const m = String(f.name).match(/^COSTI ANNUALI (20\d\d)\.xls[xm]$/i); if (m && (!anni[m[1]] || /\.xlsm$/i.test(f.name))) anni[m[1]] = {nome:f.name, id:f.id}; }
+  const c2 = getConfig(); Object.assign(c2, {anni, anniT:Date.now()}); localStorage.setItem('budgetConfig', JSON.stringify(c2));
+  return anni;
+}
+async function cambiaAnno(y){
+  y = String(y);
+  try {
+    const anni = await anniDisponibili(), a = anni[y];
+    if (!a) { toast(`Non trovo il file COSTI ANNUALI ${y}`); return; }
+    const cfg = getConfig(); Object.assign(cfg, {filePath: cartellaFile() + '/' + a.nome, fileId: a.id, tableName: 'TblTransazioni'});
+    localStorage.setItem('budgetConfig', JSON.stringify(cfg));
+    invalidaTutto(); TAB_SCONTRINI.ok = TAB_ARTICOLI.ok = false; _protette = null; ES = {fase:'scelta', tipo:'conto'}; UF = {fase:'inizio'};
+    const t = oggiApp(); S.movM = {y:t.getFullYear(), m:t.getMonth()}; S.budM = {y:t.getFullYear(), m:t.getMonth()};
+    PILA.length = 0; await go('oggi'); toast(+y === annoReale() ? `Di nuovo nel ${y}` : `Stai guardando il ${y}`);
+  } catch(e) { toast('Non riesco a cambiare anno: ' + String(e.message).slice(0, 120)); }
+}
+const elencoAnni = () => Object.keys((getConfig()||{}).anni || {}).sort();
+function bannerAnno(){
+  const a = annoFile(), r = annoReale();
+  if (a >= r || !elencoAnni().includes(String(r))) return '';
+  return `<div class="banner">${ico('History')}<span>Stai guardando il ${a}: le voci nuove vanno nel file di quell'anno.</span><button class="btn" onclick="cambiaAnno(${r})">Torna al ${r}</button></div>`;
+}
+
+let _anniCache = null;
+async function tuttiGliAnni(){
+  if (_anniCache && Date.now() - _anniCache.t < 5*60*1000) return _anniCache.v;
+  const anni = await anniDisponibili();
+  const v = await Promise.all(Object.entries(anni).sort().map(async ([y, a]) => {
+    try { return {y:+y, righe: +y === annoFile() ? await getTransazioni() : await righeDelFile(a.id)}; }
+    catch(e) { return {y:+y, righe:[], errore:e.message}; }
+  }));
+  _anniCache = {t:Date.now(), v}; return v;
+}
+function anniChart(A){
+  const W = 344, H = 184, L = 48, B = 24, T = 8, w = W - L, h = H - B - T, grigi = ['var(--text-3)','var(--bar)','var(--line-1)'];
+  const serie = A.map(a => { const U = []; for (let m = 0; m < 12; m++) { const Lm = a.righe.filter(r => sameYM(r.data, a.y, m)); U.push(Lm.length ? uscite(Lm) : null); } return {y:a.y, U}; });
+  const mx = Math.max(1, ...serie.flatMap(x => x.U.filter(v => v != null)));
+  const step = [250,500,1000,2000,2500,5000,10000].find(s => mx/s <= 4) || 20000, top = Math.ceil(mx/step)*step;
+  const X = i => L + (i + .5)*w/12, Yp = v => T + h - v/top*h;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Uscite mese per mese, un anno per linea">`;
+  for (let v = 0; v <= top; v += step) s += `<line x1="${L}" x2="${W}" y1="${Yp(v)}" y2="${Yp(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${L-8}" y="${Yp(v)+4}" text-anchor="end">${nf0.format(v)}</text>`;
+  serie.forEach((x, k) => {
+    const col = k === serie.length - 1 ? 'var(--line-2)' : grigi[(serie.length - 2 - k) % grigi.length];
+    let d = '', su = false; x.U.forEach((v, i) => { if (v == null) { su = false; return; } d += (su ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Yp(v).toFixed(1) + ' '; su = true; });
+    if (d) s += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${k === serie.length - 1 ? 2 : 1.25}" stroke-linejoin="round"/>`;
+    x.col = col;
+  });
+  for (let i = 0; i < 12; i++) s += `<text x="${X(i)}" y="${H-4}" text-anchor="middle">${mese(i).slice(0,3).toLowerCase()}</text>`;
+  return {svg: s + '</svg>', serie};
+}
+async function vAnni(){
+  const A = (await tuttiGliAnni()).filter(a => a.righe.length);
+  if (!A.length) return `<h1 class="lt">Negli anni</h1><div class="card"><p>Non trovo i file degli anni nella cartella del file Excel.</p></div>`;
+  const dati = A.map(a => { const mesi = new Set(a.righe.map(r => String(r.data).slice(0, 7))).size; return {y:a.y, E:entrate(a.righe), U:uscite(a.righe), I:investito(a.righe), mesi}; });
+  const mxU = Math.max(...dati.map(d => d.U), 1);
+  const ch = anniChart(A);
+  // categorie: spesa per anno, confronto fra gli ultimi due anni completi
+  const cat = {}; A.forEach(a => a.righe.filter(spesa).forEach(r => { const c = r.tipologia || 'ALTRO'; (cat[c] = cat[c] || {})[a.y] = (cat[c][a.y] || 0) - r.valore; }));
+  const pieni = dati.filter(d => d.mesi >= 12).map(d => d.y), [y1, y2] = pieni.slice(-2);
+  const righeCat = Object.entries(cat).map(([c, v]) => ({c, v, tot: Object.values(v).reduce((s, x) => s + x, 0)})).sort((a, b) => b.tot - a.tot).slice(0, 12);
+  const barre = v => { const mx = Math.max(...A.map(a => v[a.y] || 0), 1); return `<svg viewBox="0 0 ${A.length*14} 24" width="${A.length*14}" height="24" aria-hidden="true">${A.map((a, k) => { const hh = Math.max(1, (v[a.y]||0)/mx*22); return `<rect x="${k*14+2}" y="${24-hh}" width="10" height="${hh}" rx="2" fill="${k === A.length-1 ? 'var(--line-2)' : 'var(--bar)'}"/>`; }).join('')}</svg>`; };
+  return `<h1 class="lt">Negli anni</h1>
+  <div class="cols"><div>
+  <section class="card hero">
+    <p class="lead">Dal ${A[0].y} al ${A[A.length-1].y} sono entrati <b class="num">${eur0(dati.reduce((s, d) => s + d.E, 0))}</b> e usciti <b class="num">${eur0(dati.reduce((s, d) => s + d.U, 0))}</b>.</p>
+    <p class="muted" style="margin-top:8px">Investiti in tutto <b class="num">${eur0(dati.reduce((s, d) => s + d.I, 0))}</b>, che restano tuoi.</p>
+    <div style="margin-top:16px">${ch.svg}</div>
+    <div class="key" style="flex-wrap:wrap">${ch.serie.map(x => `<span style="--c:${x.col}"><i></i>${x.y}</span>`).join('')}</div>
+  </section>
+  <h2 class="gh">Anno per anno</h2>
+  <div class="list">${dati.slice().reverse().map(d => { const saldo = d.E - d.U; return `<button class="row" onclick="cambiaAnno(${d.y})"><span class="row-main"><span class="row-line"><span class="row-title">${d.y}${d.mesi < 12 ? ` <span class="muted" style="font-size:13px">${d.mesi === 1 ? '1 mese' : d.mesi + ' mesi'}</span>` : ''}</span><span class="${saldo >= 0 ? 'pos' : 'neg'}">${saldo >= 0 ? '+' : '−'}${eur0(Math.abs(saldo))}</span></span>
+    <span class="bar"><i style="width:${d.U/mxU*100}%"></i></span>
+    <span class="row-sub num">Uscite ${eur0(d.U)}, entrate ${eur0(d.E)}${d.I ? `, investiti ${eur0(d.I)}` : ''}, in media ${eur0(d.U/Math.max(d.mesi,1))} al mese</span></span>${chev()}</button>`; }).join('')}</div>
+  <p class="note">Tocca un anno per aprirlo in tutta l'app. Il risparmio è entrate meno uscite, senza contare gli investimenti.</p>
+  </div><div>
+  <h2 class="gh">Categorie</h2>
+  <div class="list">${righeCat.map(x => { const d = y1 && y2 && x.v[y1] ? (x.v[y2]||0)/x.v[y1] - 1 : null; return `<div class="row"><span class="row-main"><span class="row-title">${esc(nome(x.c))}</span><span class="row-sub num">${eur0(x.tot)} in tutto${d != null ? `, ${y2} contro ${y1}: <span class="${d > 0.02 ? 'neg' : d < -0.02 ? 'pos' : 'muted'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${nf0.format(Math.abs(d*100))}%</span>` : ''}</span></span>${barre(x.v)}</div>`; }).join('')}</div>
+  <p class="note">Le barre sono gli anni dal ${A[0].y} al ${A[A.length-1].y}, l'ultimo in blu.${dati.some(d => d.mesi < 12) ? ' Gli anni con meno di 12 mesi sono parziali.' : ''}</p>
+  </div></div>`;
+}
+
 // ── IMPOSTAZIONI ──────────────────────────────────────────────
 async function vImpost(){
   const cfg = getConfig() || {}, acc = msalInstance.getActiveAccount();
   return `<h1 class="lt">Impostazioni</h1>
   <h2 class="gh" style="margin-top:0">Aspetto</h2>
   ${seg([['auto','Automatico'],['light','Chiaro'],['dark','Scuro']], S.theme, 'setTheme')}
+  ${elencoAnni().length > 1 ? `<h2 class="gh">Anno</h2>${seg(elencoAnni().map(y => [y, y]), String(annoFile()), 'cambiaAnno')}<p class="note" style="margin:0 8px 16px">Ogni anno ha il suo file Excel: scegli quale guardare in tutta l'app.</p>` : ''}
   <h2 class="gh">File Excel</h2>
   <div class="list plain">
     <div class="row"><span class="row-main"><span class="row-title">Percorso su OneDrive</span><span class="row-sub" style="word-break:break-all">${esc(cfg.filePath||'')}</span></span></div>
@@ -2508,7 +2622,7 @@ function openTx(idx, daCategoria){
 // pannello di una categoria: tutte le spese del periodo, con la mediana
 let CS = null; // {cat, per:'mese'|'anno'|'tutto', y, m, ord:'data'|'importo'}
 const mediana = a => { if (!a.length) return 0; const s = [...a].sort((x,y)=>x-y), k = s.length>>1; return s.length%2 ? s[k] : (s[k-1]+s[k])/2; };
-function apriCategoria(cat, per, y, m){ const t = new Date(); CS = {cat, per, y:y??t.getFullYear(), m:m??t.getMonth(), ord:'data'}; openSheet(''); drawCategoria(); }
+function apriCategoria(cat, per, y, m){ const t = oggiApp(); CS = {cat, per, y:y??t.getFullYear(), m:m??t.getMonth(), ord:'data'}; openSheet(''); drawCategoria(); }
 function setPerCat(p){ CS.per = p; drawCategoria(); }
 function drawCategoria(){
   if (!CS) return;
