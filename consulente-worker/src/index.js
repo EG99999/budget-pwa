@@ -47,6 +47,12 @@ const SYSTEM_CATEGORIZZA = `Ricevi movimenti di un estratto conto, uno per riga 
 - descrizione: nome breve e leggibile della controparte o dell'operazione ("Conad Chiari", "Bonifico a Mario Rossi", "Netflix"), senza codici, numeri di carta o IBAN.
 - mezzo, tipo e categoria con le stesse regole: carta o POS e prelievo -> CARTA DI DEBITO; addebito diretto (SDD, RID, utenze) -> ADDEBITO CONTO; bonifico in uscita -> BONIFICO; bonifico in entrata e stipendio -> ACCREDITO CONTO; giroconto -> ALTRO TRASFERIMENTO. tipo: normale, saldo_carta (addebito mensile della carta di credito), giroconto (tra conti della stessa persona), commissione (spese, bolli, interessi). La categoria della banca, se c'è, è solo un indizio: scegli fra le categorie del bilancio guardando gli ESEMPI delle voci già registrate.`;
 
+const SYSTEM_UNIFORMA = `Ricevi le voci del bilancio di una persona, numerate: descrizione, categoria, quante volte compare, importo medio. Trova le voci che sono LA STESSA COSA scritta in modi diversi o messa in categorie diverse (la stessa pizzeria una volta in Svaghi e una in Ristoranti, "Fibra Planetel" e "Internet Planetel") e proponi per ogni gruppo una sola categoria e un solo nome.
+- Raggruppa solo cose davvero uguali: stesso negozio, servizio, abbonamento o abitudine ricorrente. Due ristoranti diversi restano separati.
+- categoria: la più adatta fra quelle dello schema, di solito la più usata nel gruppo. nome: breve, in maiuscolo come le voci, senza mese, data o numero di rata.
+- motivo: una frase breve in italiano che spiega cosa cambia.
+- Proponi solo gruppi di almeno due voci in cui cambia qualcosa (categorie diverse, o nomi diversi per la stessa cosa). Al massimo 40 gruppi, i più utili prima.`;
+
 const oggetto = (props) => ({ type: "object", properties: props, required: Object.keys(props), additionalProperties: false });
 const schemaScontrino = (cats) => oggetto({
   leggibile: { type: "boolean" },
@@ -79,6 +85,12 @@ const schemaCategorizza = (cats) => oggetto({
     mezzo: { type: "string", enum: MEZZI },
     tipo: { type: "string", enum: ["normale", "saldo_carta", "giroconto", "commissione"] },
     categoria: { type: "string", enum: cats },
+  }) },
+});
+const schemaUniforma = (cats) => oggetto({
+  gruppi: { type: "array", items: oggetto({
+    voci: { type: "array", items: { type: "integer" } },
+    categoria: { type: "string", enum: cats }, nome: { type: "string" }, motivo: { type: "string" },
   }) },
 });
 // le categorie del bilancio arrivano dall'app: solo testo breve, senza doppioni
@@ -136,6 +148,16 @@ async function categorizza(body, env) {
   ], schemaCategorizza(cats), "low", 32000);
 }
 
+// voci scritte o categorizzate in modi diversi: l'app manda l'elenco delle voci distinte, Claude propone i gruppi
+async function uniforma(body, env) {
+  const cats = pulisciCategorie(body.categorie);
+  const voci = (Array.isArray(body.voci) ? body.voci : []).slice(0, 1500).map((v, i) => `${i + 1}. ${String(v).slice(0, 200)}`);
+  if (!cats.length || voci.length < 2) throw new ErroreLettura("Servono almeno due voci.");
+  return leggi(env, SYSTEM_UNIFORMA, [
+    { type: "text", text: `VOCI (descrizione | categoria | volte | importo medio):\n${voci.join("\n")}` },
+  ], schemaUniforma(cats), "medium", 32000);
+}
+
 async function estratto(body, env) {
   const cats = pulisciCategorie(body.categorie);
   if (!cats.length) throw new ErroreLettura("Mancano le categorie del bilancio.");
@@ -186,7 +208,7 @@ export default {
     try { body = await req.json(); } catch { return risposta("Richiesta non valida", 400, h); }
 
     const percorso = new URL(req.url).pathname;
-    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza };
+    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza, "/uniforma": uniforma };
     if (lettori[percorso]) {
       const json = (o, stato) => new Response(JSON.stringify(o), { status: stato, headers: { ...h, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
       try { return json(await lettori[percorso](body, env), 200); }

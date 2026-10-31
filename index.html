@@ -676,6 +676,7 @@ const VIEWS = {
   coab:{t:'Coabitazione',r:vCoab,parent:'analisi',w:'stretto'},
   consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,w:'stretto',act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi',w:'stretto'},
+  uniforma:{t:'Uniforma',r:vUniforma,parent:'analisi',w:'stretto'},
   estratto:{t:'Estratto conto',r:vEstratto,parent:'analisi',w:'stretto'},
   scontrini:{t:'Scontrini',r:vScontrini,parent:'analisi',after:dopoScontrini,w:'stretto'},
   prezzi:{t:'Prezzi',r:vPrezzi,parent:'scontrini',after:disegnaProdotti,w:'stretto'}
@@ -721,7 +722,7 @@ function drawSide(){
     <button class="btn" onclick="openAdd()" title="Nuova voce (tasto N)" aria-keyshortcuts="N">${ico('Plus')}Nuova voce</button>
     ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
     <h3>Analisi</h3>
-    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('salute','Activity','Salute finanziaria')}${it('casa','House','Casa')}
+    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}
     <h3>Importa</h3>
     ${it('estratto','FileUp','Estratto conto')}${it('scontrini','ReceiptText','Scontrini')}${it('prezzi','ChartLine','Prezzi')}
@@ -993,7 +994,7 @@ async function vAnalisi(){
   return `<h1 class="lt">Analisi</h1>
   <div class="gruppi">
   <section class="blocco"><h2 class="gh">Capire le spese</h2>
-  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}</div></section>
+  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}${r('uniforma','Combine','Uniforma le voci','')}</div></section>
   <section class="blocco"><h2 class="gh">Spese da seguire</h2>
   <div class="list">${r('casa','House','Casa',vC)}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
   <section class="blocco"><h2 class="gh">Importa</h2>
@@ -2177,6 +2178,93 @@ function apriProdotto(i){
   </div>`);
 }
 
+// ── UNIFORMA: la stessa spesa scritta o messa in categorie diverse
+// Claude propone i gruppi, Elia li applica uno per uno; si cambiano solo categoria (e nome, se lo sceglie) delle righe del file
+let UF = { fase:'inizio' };
+async function vUniforma(){
+  const titolo = '<h1 class="lt">Uniforma le voci</h1>';
+  if (UF.fase === 'lettura') return titolo + `<div class="card"><div class="loading" style="padding:24px 0"><span class="spinner"></span>Claude sta confrontando le tue voci</div><p class="note" style="margin:0;text-align:center">Di solito meno di un minuto.</p></div>`;
+  if (UF.fase !== 'risultato') return titolo + `
+  <p class="muted" style="margin-bottom:16px">Cerco le spese uguali scritte in modi diversi o messe in categorie diverse, per esempio la stessa pizzeria una volta in svaghi e una in ristoranti, e ti propongo una categoria e un nome per ognuna.</p>
+  <button class="btn" onclick="analizzaUniforma()">Analizza le voci</button>
+  ${UF.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>${esc(UF.errore)}</span></p>` : ''}
+  <p class="note">Le descrizioni e le categorie delle voci del file vengono inviate a Claude tramite il ponte (pochi centesimi). Nel file non cambia nulla finché non tocchi Applica su un gruppo.</p>`;
+  const G = UF.gruppi.filter(g => !g.ignorato);
+  return titolo + `<p class="muted" style="margin-bottom:16px">${G.length ? `${G.length === 1 ? '1 gruppo' : G.length + ' gruppi'} da guardare.` : 'Nessuna proposta rimasta.'} Applica cambia le righe nel file Excel.</p>
+  ${G.map(g => { const i = UF.gruppi.indexOf(g), daCambiare = righeDaCambiare(g); return `<section class="card" style="margin-bottom:16px">
+    <p style="font-weight:600">${esc(frase(g.nome))}</p>
+    <p class="muted" style="font-size:15px;margin:4px 0 8px">${esc(g.motivo)}</p>
+    <div class="list plain" style="margin:0 -16px">${g.voci.map(v => `<div class="row"><span class="ic">${icoCat(v.cat)}</span><span class="row-main"><span class="row-title">${esc(frase(v.desc))}</span><span class="row-sub">${esc(nome(v.cat))}${v.cat !== g.categoria ? ` <span class="warn">diventa ${esc(nome(g.categoria).toLowerCase())}</span>` : ''}, ${v.righe.length === 1 ? 'una volta' : v.righe.length + ' volte'}</span></span></div>`).join('')}</div>
+    ${new Set(g.voci.map(v => baseNome(v.desc))).size > 1 ? `<button class="row" style="margin:0 -16px;width:calc(100% + 32px)" onclick="UF.gruppi[${i}].rinomina=!UF.gruppi[${i}].rinomina;render()"><span class="check ${g.rinomina ? 'on' : ''}">${g.rinomina ? ico('Check') : ''}</span><span class="row-main"><span class="row-title">Rinomina tutte in «${esc(frase(g.nome))}»</span><span class="row-sub">Tiene il mese e le parole che usano le formule del file</span></span></button>` : ''}
+    ${g.fatto != null ? `<p class="pos" style="margin-top:8px">${g.fatto === 1 ? '1 riga cambiata' : g.fatto + ' righe cambiate'}.</p>`
+      : `<div style="display:flex;gap:8px;margin-top:8px"><button class="btn" style="margin:0" ${g.busy || !daCambiare ? 'disabled' : ''} onclick="applicaGruppo(${i})">${g.busy ? 'Applico…' : daCambiare ? `Applica a ${daCambiare === 1 ? '1 riga' : daCambiare + ' righe'}` : 'Niente da cambiare'}</button><button class="btn soft" style="margin:0" onclick="UF.gruppi[${i}].ignorato=true;render()">Ignora</button></div>`}
+    ${g.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>${esc(g.errore)}</span></p>` : ''}
+  </section>`; }).join('')}
+  <button class="btn soft" onclick="UF={fase:'inizio'};render()">Analizza di nuovo</button>
+  ${UF.costo ? `<p class="note">Analisi: ${usd(UF.costo)}.</p>` : ''}`;
+}
+// parole che le formule del file cercano nelle descrizioni (SEARCH("---EEE---"...)): rinominando non vanno mai perse
+let _protette = null;
+async function paroleProtette(){
+  if (_protette) return _protette;
+  const fogli = (await apiGet(`${wb()}/worksheets?$select=name`)).value;
+  if (!Array.isArray(fogli)) throw new Error('elenco dei fogli non leggibile');
+  const P = new Set();
+  for (const f of fogli) {
+    const u = await apiGet(`${wb()}/worksheets('${encodeURIComponent(f.name)}')/usedRange?$select=formulas`);
+    for (const riga of u.formulas || []) for (const c of riga) if (typeof c === 'string' && c[0] === '=') for (const m of c.matchAll(/SEARCH\(\s*"([^"]+)"/gi)) P.add(m[1]);
+  }
+  return _protette = [...P];
+}
+const MESI_RE = /\b(gennaio|genaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\b(\s+(19|20)\d\d)?/i;
+// la stessa voce senza mese, anno, numeri e rate: se due nomi restano diversi, sono scritti davvero in modo diverso
+const baseNome = d => normTesto(d).replace(new RegExp(MESI_RE.source, 'gi'), ' ').replace(/\b(rata|prima|seconda|terza|ultima|tranche)\b|#?\d+|[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+function nuovoNome(vecchio, canonico, protette){
+  let n = String(canonico).toUpperCase().trim();
+  for (const p of protette) if (normTesto(vecchio).includes(normTesto(p)) && !normTesto(n).includes(normTesto(p))) n = p.toUpperCase() + ' ' + n;
+  const mese = String(vecchio).match(MESI_RE);
+  if (mese && !normTesto(n).includes(normTesto(mese[0]))) n += ' ' + mese[0].toUpperCase();
+  return n;
+}
+const righeDaCambiare = g => g.voci.reduce((n, v) => n + v.righe.filter(r => r.tipologia !== g.categoria || (g.rinomina && baseNome(r.descrizione) !== baseNome(g.nome))).length, 0);
+async function analizzaUniforma(){
+  UF = { fase:'lettura' }; render();
+  try {
+    const rows = await getTransazioni();
+    // una voce per coppia descrizione e categoria: la stessa descrizione in due categorie è già un indizio
+    const M = new Map();
+    for (const r of rows) {
+      const k = chiaveDesc(r.descrizione) + '|' + r.tipologia; if (!r.descrizione) continue;
+      let v = M.get(k); if (!v) M.set(k, v = {desc:r.descrizione, cat:r.tipologia, righe:[]});
+      v.righe.push(r);
+    }
+    const voci = [...M.values()];
+    const j = await leggiConClaude('/uniforma', { categorie: tutteCat(rows), voci: voci.map(v => `${v.desc} | ${v.cat} | ${v.righe.length} | ${nf.format(v.righe.reduce((s, r) => s + Math.abs(r.valore), 0) / v.righe.length)}`) });
+    const gruppi = (j.gruppi||[]).map(g => ({ nome:g.nome, motivo:g.motivo, categoria:g.categoria, voci:[...new Set(g.voci)].map(n => voci[n - 1]).filter(Boolean), rinomina:false }))
+      .filter(g => g.voci.length >= 2 || (g.voci.length === 1 && g.voci[0].cat !== g.categoria))
+      .filter(g => righeDaCambiare(g) || new Set(g.voci.map(v => baseNome(v.desc))).size > 1)
+      .sort((a, b) => (righeDaCambiare(b) > 0) - (righeDaCambiare(a) > 0));
+    UF = { fase:'risultato', gruppi, costo:j.costo };
+  } catch(e) { UF = { fase:'inizio', errore:'Analisi non riuscita: ' + (e.message || e) }; }
+  if (S.view === 'uniforma') render();
+}
+async function applicaGruppo(i){
+  const g = UF.gruppi[i], cfg = getConfig(); g.busy = true; g.errore = ''; render();
+  let n = 0;
+  try {
+    let protette = [];
+    if (g.rinomina) { try { protette = await paroleProtette(); } catch(e) { throw new Error('non riesco a leggere le formule del file, quindi non rinomino: togli la spunta per cambiare solo la categoria'); } }
+    for (const v of g.voci) for (const r of v.righe) {
+      const desc = g.rinomina && baseNome(r.descrizione) !== baseNome(g.nome) ? nuovoNome(r.descrizione, g.nome, protette) : r.descrizione;
+      if (r.tipologia === g.categoria && desc === r.descrizione) continue;
+      await apiPatch(`${wb()}/tables/${cfg.tableName}/rows/itemAt(index=${r._index})`, {values:[[r.senso, g.categoria, r.valore, r.cadenza, desc, r.metodo, r.mezzo, r.data, r.mese || MESI_IT[+String(r.data).slice(5,7) - 1]]]});
+      r.tipologia = g.categoria; r.descrizione = desc; n++;
+    }
+    g.fatto = n; invalidateCache(); toast(n === 1 ? '1 riga cambiata' : `${n} righe cambiate`);
+  } catch(e) { g.errore = `Cambiate ${n} righe, poi errore: ${String(e.message).slice(0, 160)}`; invalidateCache(); }
+  g.busy = false; render();
+}
+
 // ── IMPOSTAZIONI ──────────────────────────────────────────────
 async function vImpost(){
   const cfg = getConfig() || {}, acc = msalInstance.getActiveAccount();
@@ -2353,7 +2441,8 @@ function drawAdd(){
     <div class="cats">${shown.map(c=>`<button class="cat ${A.cat===c?'on':''}" data-f="cat-${esc(c)}" onclick='setCat(${JSON.stringify(c)},event)' aria-pressed="${A.cat===c}"><span class="ic">${icoCat(c)}</span>${esc(nome(c))}</button>`).join('')}
       <button class="cat" data-f="altre" onclick="A.all=!A.all;drawAdd()"><span class="ic">${ico(A.all?'ChevronLeft':'Plus')}</span>${A.all?'Meno':'Altre'}</button></div>
     <p class="sublabel">Descrizione</p>
-    <input class="input" placeholder="Facoltativa" value="${esc(A.desc)}" oninput="A.desc=this.value" aria-label="Descrizione" autocomplete="off">
+    <input class="input" placeholder="Facoltativa" value="${esc(A.desc)}" oninput="A.desc=this.value;aggiornaSimili()" aria-label="Descrizione" autocomplete="off">
+    <div id="simili">${similiHtml()}</div>
     <div class="list plain" style="margin-top:16px">
       <button class="row" data-f="dettagli" onclick="A.open=!A.open;drawAdd()" aria-expanded="${A.open}"><span class="row-main"><span class="row-title">Dettagli</span><span class="row-sub">${dLab}, ${frase(A.mezzo).toLowerCase()}, ${frase(A.cad).toLowerCase()}</span></span>${ico(A.open?'ChevronLeft':'ChevronRight','chev')}</button>
       ${A.open?`
@@ -2388,6 +2477,41 @@ function setCat(c, ev){
 function fillFrom(idx){
   const r = trovaRiga(idx); if (!r) return;
   Object.assign(A, {s:String(r.senso||(r.valore<0?'USCITA':'ENTRATA')).toUpperCase(), cat:r.tipologia||'', desc:r.descrizione||'', amt:strImporto(r.valore), cad:r.cadenza||'SECCA', met:r.metodo||'ELETTRONICO', mezzo:r.mezzo||'CARTA DI DEBITO', cerca:false, auto:false});
+  drawAdd();
+}
+// voci già registrate che somigliano a quella che si sta scrivendo: si riusano nome e categoria invece di inventarne di nuovi
+const normTesto = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const chiaveDesc = s => String(s||'').trim().toUpperCase().replace(/\s+/g, ' ');
+function similiA(q, senso){
+  const qt = normTesto(q).split(/[^a-z0-9]+/).filter(w => w.length >= 3);
+  if (!qt.length) return [];
+  const G = new Map();
+  for (const r of cachedRows||[]) {
+    if (!r.descrizione || String(r.senso||'').toUpperCase() !== senso) continue;
+    const dt = normTesto(r.descrizione).split(/[^a-z0-9]+/);
+    let s = 0; for (const w of qt) if (dt.some(t => t.startsWith(w))) s++;
+    if (s < Math.max(1, qt.length - 1)) continue;
+    const k = chiaveDesc(r.descrizione);
+    let g = G.get(k); if (!g) G.set(k, g = {r, n:0, s, cats:{}});
+    g.n++; g.cats[r.tipologia] = (g.cats[r.tipologia]||0) + 1;
+    if (String(r.data) > String(g.r.data)) g.r = r;
+  }
+  return [...G.values()].sort((a, b) => b.s - a.s || b.n - a.n).slice(0, 4);
+}
+function similiHtml(){
+  if (!A || A.edit != null || !A.desc || A.desc.trim().length < 3) return '';
+  const L = similiA(A.desc, A.s); if (!L.length) return '';
+  const tot = {}; L.forEach(g => Object.entries(g.cats).forEach(([c, n]) => tot[c] = (tot[c]||0) + n));
+  const solita = Object.entries(tot).sort((a, b) => b[1] - a[1])[0][0];
+  const giaUguale = L.some(g => chiaveDesc(g.r.descrizione) === chiaveDesc(A.desc) && g.r.tipologia === A.cat);
+  return `${A.cat && solita && A.cat !== solita ? `<p class="avviso">${ico('TriangleAlert')}<span>Voci come questa di solito sono in ${esc(nome(solita).toLowerCase())}. <button class="link" onclick='setCat(${JSON.stringify(solita)})'>Usa ${esc(nome(solita).toLowerCase())}</button></span></p>` : ''}
+  ${giaUguale ? '' : `<p class="sublabel">Già registrate, tocca per riusarla</p><div class="list">${L.map(g => `<button class="row" onclick="usaSimile(${g.r._index})"><span class="ic">${icoCat(g.r.tipologia)}</span><span class="row-main"><span class="row-title">${esc(frase(g.r.descrizione))}</span><span class="row-sub">${Object.keys(g.cats).map(c => esc(nome(c))).join(' o ')}, ${g.n === 1 ? 'una volta' : g.n + ' volte'}, ultima ${fmt(Math.abs(g.r.valore))}</span></span></button>`).join('')}</div>`}`;
+}
+function aggiornaSimili(){ const el = $('#simili'); if (el) el.innerHTML = similiHtml(); }
+function usaSimile(idx){
+  const r = trovaRiga(idx); if (!r) return;
+  Object.assign(A, {cat:r.tipologia||'', desc:r.descrizione||'', cad:r.cadenza||A.cad, met:r.metodo||A.met, mezzo:r.mezzo||A.mezzo, auto:false});
+  if (!A.amt) A.amt = strImporto(r.valore);
   drawAdd();
 }
 function kp(k){
