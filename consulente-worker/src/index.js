@@ -53,6 +53,16 @@ const SYSTEM_UNIFORMA = `Ricevi le voci del bilancio di una persona, numerate: d
 - motivo: una frase breve in italiano che spiega cosa cambia.
 - Proponi solo gruppi di almeno due voci in cui cambia qualcosa (categorie diverse, o nomi diversi per la stessa cosa). Al massimo 40 gruppi, i più utili prima.`;
 
+const SYSTEM_BOLLETTA = `Leggi una bolletta italiana di luce e/o gas (PDF o foto) e compila lo schema. Una bolletta può contenere entrambe le utenze: una voce in utenze per ciascuna.
+- periodo_da e periodo_al: il periodo oggetto di fatturazione di quell'utenza (AAAA-MM-GG), non la data della bolletta.
+- consumo: il consumo totale fatturato del periodo (Smc per il gas, kWh per la luce); stimato = true se il consumo fatturato è tutto stimato.
+- totale: il totale di quell'utenza ("Totale bolletta" della sua sezione, oppure "Totale Gas" / "Totale Energia Elettrica").
+- tasse: "Accise e Iva" oppure "Totale imposte e IVA" di quell'utenza.
+- quota_consumi: la spesa per il consumo di quell'utenza: "Quota per Consumi" nei formati recenti, "Spesa per la materia gas" / "Spesa per la materia energia elettrica" nei formati vecchi.
+- indice: il valore dell'indice di mercato del periodo se è stampato (PSV in €/Smc per il gas, PUN in €/kWh per la luce; se ci sono più fasce, la media delle fasce); 0 se non c'è. indice_nome: PSV, PUN o "".
+- fattura: numero, data_emissione e scadenza (AAAA-MM-GG), totale_da_pagare della bolletta intera, fornitore.
+- Numeri come sono stampati, senza arrotondare. leggibile = false se non è una bolletta di luce o gas.`;
+
 const oggetto = (props) => ({ type: "object", properties: props, required: Object.keys(props), additionalProperties: false });
 const schemaScontrino = (cats) => oggetto({
   leggibile: { type: "boolean" },
@@ -91,6 +101,16 @@ const schemaUniforma = (cats) => oggetto({
   gruppi: { type: "array", items: oggetto({
     voci: { type: "array", items: { type: "integer" } },
     categoria: { type: "string", enum: cats }, nome: { type: "string" }, motivo: { type: "string" },
+  }) },
+});
+const schemaBolletta = () => oggetto({
+  leggibile: { type: "boolean" }, fornitore: { type: "string" }, numero: { type: "string" },
+  data_emissione: { type: "string" }, scadenza: { type: "string" }, totale_da_pagare: { type: "number" },
+  utenze: { type: "array", items: oggetto({
+    tipo: { type: "string", enum: ["gas", "luce"] }, periodo_da: { type: "string" }, periodo_al: { type: "string" },
+    consumo: { type: "number" }, unita: { type: "string", enum: ["Smc", "kWh"] }, stimato: { type: "boolean" },
+    totale: { type: "number" }, tasse: { type: "number" }, quota_consumi: { type: "number" },
+    indice: { type: "number" }, indice_nome: { type: "string", enum: ["PSV", "PUN", ""] },
   }) },
 });
 // le categorie del bilancio arrivano dall'app: solo testo breve, senza doppioni
@@ -135,6 +155,17 @@ async function scontrino(body, env) {
     ...foto.map(data => ({ type: "image", source: { type: "base64", media_type: body.media_type, data } })),
     { type: "text", text: (foto.length > 1 ? `Scontrino in ${foto.length} pezzi, dall'alto in basso.\n\n` : "") + noti },
   ], schemaScontrino(cats), "medium", 16000);
+}
+
+// bollette di luce e gas: PDF, foto (anche più pagine) o testo già estratto
+async function bolletta(body, env) {
+  let parti;
+  if (body.tipo === "pdf" && typeof body.dati === "string" && body.dati) parti = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.dati } }];
+  else if (body.tipo === "immagini" && Array.isArray(body.dati)) parti = body.dati.filter(x => typeof x === "string" && x).slice(0, 12).map(data => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }));
+  else if (body.tipo === "testo" && typeof body.dati === "string" && body.dati.trim()) parti = [{ type: "text", text: "TESTO DELLA BOLLETTA:\n" + body.dati.slice(0, MAX_DATI) }];
+  if (!parti || !parti.length) throw new ErroreLettura("Manca la bolletta.");
+  if (body.tipo === "immagini" && parti.length > 1) parti.push({ type: "text", text: "Le foto sono pagine della stessa bolletta, in ordine." });
+  return leggi(env, SYSTEM_BOLLETTA, parti, schemaBolletta(), "low", 8000);
 }
 
 // estratti in tabella: l'app legge le colonne da sola e manda qui solo i movimenti da aggiungere
@@ -213,7 +244,7 @@ export default {
     try { body = await req.json(); } catch { return risposta("Richiesta non valida", 400, h); }
 
     const percorso = new URL(req.url).pathname;
-    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza, "/uniforma": uniforma };
+    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza, "/uniforma": uniforma, "/bolletta": bolletta };
     if (lettori[percorso]) {
       const json = (o, stato) => new Response(JSON.stringify(o), { status: stato, headers: { ...h, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
       try { return json(await lettori[percorso](body, env), 200); }

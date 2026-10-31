@@ -674,7 +674,7 @@ async function getTransazioni() {
   return cachedRows;
 }
 function invalidateCache() { cachedRows=null; cacheTime=0; }
-function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; }
+function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; bolletteCache=null; }
 
 async function getBudget() {
   if (!budgetCache) { const d = await readRange('BUDGET MASTER','B4:R32'); budgetCache = d.values; }
@@ -794,6 +794,7 @@ const VIEWS = {
   consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,w:'stretto',act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi',w:'stretto'},
   anni:{t:'Negli anni',r:vAnni,parent:'analisi'},
+  bollette:{t:'Bollette',r:vBollette,parent:'analisi',after:dopoBollette},
   uniforma:{t:'Uniforma',r:vUniforma,parent:'analisi',w:'stretto'},
   estratto:{t:'Estratto conto',r:vEstratto,parent:'analisi',w:'stretto'},
   scontrini:{t:'Scontrini',r:vScontrini,parent:'analisi',after:dopoScontrini,w:'stretto'},
@@ -883,7 +884,7 @@ function drawSide(){
     <button class="btn" onclick="openAdd()" title="Nuova voce (tasto N)" aria-keyshortcuts="N">${ico('Plus')}Nuova voce</button>
     ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
     <h3>Analisi</h3>
-    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('anni','History','Negli anni')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}
+    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('anni','History','Negli anni')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}${it('bollette','Zap','Bollette')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}
     <h3>Importa</h3>
     ${it('estratto','FileUp','Estratto conto')}${it('scontrini','ReceiptText','Scontrini')}${it('prezzi','ChartLine','Prezzi')}
@@ -1158,7 +1159,7 @@ async function vAnalisi(){
   <section class="blocco"><h2 class="gh">Capire le spese</h2>
   <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('anni','History','Negli anni','')}${r('salute','Activity','Salute finanziaria',vS)}${r('uniforma','Combine','Uniforma le voci','')}</div></section>
   <section class="blocco"><h2 class="gh">Spese da seguire</h2>
-  <div class="list">${r('casa','House','Casa',vC)}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
+  <div class="list">${r('casa','House','Casa',vC)}${r('bollette','Zap','Bollette di luce e gas','')}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
   <section class="blocco"><h2 class="gh">Importa</h2>
   <div class="list">${r('estratto','FileUp','Estratto conto','')}${r('scontrini','ReceiptText','Scontrini',SC.some(x=>x.stato==='pronto')?'da rivedere':'')}${r('prezzi','ChartLine','Prezzi e inflazione','')}</div></section>
   <section class="blocco"><h2 class="gh">App</h2>
@@ -2513,6 +2514,7 @@ async function vAnni(){
     <div style="margin-top:16px">${ch.svg}</div>
     <div class="key" style="flex-wrap:wrap">${ch.serie.map(x => `<span style="--c:${x.col}"><i></i>${x.y}</span>`).join('')}</div>
   </section>
+  <button class="btn" style="margin-top:16px" onclick="apriPerche(${dati.length > 1 ? dati[dati.length-2].y : 0},${dati[dati.length-1].y})">${ico('Search')}Perché è cambiato?</button>
   <h2 class="gh">Anno per anno</h2>
   <div class="list">${dati.slice().reverse().map(d => { const saldo = d.E - d.U; return `<button class="row" onclick="cambiaAnno(${d.y})"><span class="row-main"><span class="row-line"><span class="row-title">${d.y}${d.mesi < 12 ? ` <span class="muted" style="font-size:13px">${d.mesi === 1 ? '1 mese' : d.mesi + ' mesi'}</span>` : ''}</span><span class="${saldo >= 0 ? 'pos' : 'neg'}">${saldo >= 0 ? '+' : '−'}${eur0(Math.abs(saldo))}</span></span>
     <span class="bar"><i style="width:${d.U/mxU*100}%"></i></span>
@@ -2523,6 +2525,261 @@ async function vAnni(){
   <div class="list">${righeCat.map(x => { const d = y1 && y2 && x.v[y1] ? (x.v[y2]||0)/x.v[y1] - 1 : null; return `<div class="row"><span class="row-main"><span class="row-title">${esc(nome(x.c))}</span><span class="row-sub num">${eur0(x.tot)} in tutto${d != null ? `, ${y2} contro ${y1}: <span class="${d > 0.02 ? 'neg' : d < -0.02 ? 'pos' : 'muted'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${nf0.format(Math.abs(d*100))}%</span>` : ''}</span></span>${barre(x.v)}</div>`; }).join('')}</div>
   <p class="note">Le barre sono gli anni dal ${A[0].y} al ${A[A.length-1].y}, l'ultimo in blu.${dati.some(d => d.mesi < 12) ? ' Gli anni con meno di 12 mesi sono parziali.' : ''}</p>
   </div></div>`;
+}
+
+// ── PERCHÉ È CAMBIATO: confronto fra due anni (dove si è speso o guadagnato di più) e controlli sui dati che possono falsare i conti
+const TECNICHE = { AVANZO:'avanzo del mese prima registrato come entrata: sono soldi già contati, gonfia le entrate', CREDITO:'crediti e ricariche: soldi prestati o restituiti, non reddito vero',
+  DEBITO:'debiti: soldi che tornano indietro, non spesa vera', 'PRELIEVO CONTANTI':'prelievi: i contanti poi spesi possono essere contati due volte', 'ALTRO TRASFERIMENTO':'giroconti fra i tuoi conti' };
+function controlliAnno(a){
+  const R = a.righe, out = [];
+  const mesi = new Set(R.map(r => String(r.data).slice(5, 7)));
+  const mancano = MESI_IT.filter((_, i) => !mesi.has(String(i + 1).padStart(2, '0')));
+  if (mancano.length && a.y < annoReale()) out.push(`${mancano.length === 1 ? 'Manca un mese' : `Mancano ${mancano.length} mesi`} (${mancano.slice(0, 6).map(frase).join(', ')}${mancano.length > 6 ? '…' : ''}): l'anno è incompleto e il confronto lo penalizza.`);
+  for (const [c, perche] of Object.entries(TECNICHE)) {
+    const L = R.filter(r => String(r.tipologia).toUpperCase() === c); if (!L.length) continue;
+    const e = entrate(L), u = uscite(L);
+    out.push(`${frase(c)}: ${L.length} ${L.length === 1 ? 'voce' : 'voci'}${e ? `, ${eur0(e)} in entrata` : ''}${u ? `, ${eur0(u)} in uscita` : ''}. ${perche}.`);
+  }
+  const visti = {}, doppi = [];
+  for (const r of R) { const k = `${r.data}|${r.valore}`; if (visti[k] && somiglianza(visti[k].descrizione, r.descrizione) >= 1) doppi.push(r); else visti[k] = r; }
+  if (doppi.length) out.push(`${doppi.length === 1 ? 'Un possibile doppione' : `${doppi.length} possibili doppioni`} (stesso giorno, stesso importo, nome simile): ${doppi.slice(0, 3).map(r => `${esc(frase(r.descrizione))} ${giornoBreve(r.data)}, ${fmt(Math.abs(r.valore))}`).join('; ')}.`);
+  const segni = R.filter(r => (String(r.senso).toUpperCase() === 'USCITA' && r.valore > 0) || (String(r.senso).toUpperCase() === 'ENTRATA' && r.valore < 0));
+  if (segni.length) out.push(`${segni.length === 1 ? 'Una voce ha' : `${segni.length} voci hanno`} il segno opposto a entrata/uscita: ${segni.slice(0, 3).map(r => `${esc(frase(r.descrizione))} (${fmt(r.valore)})`).join('; ')}.`);
+  const somme = R.filter(r => /\b(SOMMA|SOMMATORIA|TOTALE|VARIE)\b/i.test(String(r.descrizione)) && Math.abs(r.valore) >= 100);
+  if (somme.length) out.push(`${somme.length === 1 ? 'Una voce riassume' : `${somme.length} voci riassumono`} più spese in una (${somme.slice(0, 3).map(r => esc(frase(r.descrizione))).join('; ')}): dentro l'anno pesano tutte in un mese solo.`);
+  const inv = R.filter(investimento); if (inv.length) out.push(`Investimenti: ${eur0(investito(inv))} netti, esclusi da entrate e uscite.`);
+  return out;
+}
+async function apriPerche(y1, y2){
+  const A = (await tuttiGliAnni()).filter(a => a.righe.length);
+  const anni = A.map(a => a.y);
+  if (anni.length < 2) { toast('Servono almeno due anni'); return; }
+  if (!anni.includes(y2)) y2 = anni[anni.length - 1];
+  if (!anni.includes(y1) || y1 >= y2) y1 = anni[anni.indexOf(y2) - 1] ?? anni[0];
+  const a1 = A.find(a => a.y === y1), a2 = A.find(a => a.y === y2);
+  const E1 = entrate(a1.righe), E2 = entrate(a2.righe), U1 = uscite(a1.righe), U2 = uscite(a2.righe);
+  const per = (L, f) => { const o = {}; L.filter(f).forEach(r => { const c = r.tipologia || 'ALTRO'; o[c] = (o[c] || 0) + Math.abs(r.valore); }); return o; };
+  const c1 = per(a1.righe, spesa), c2 = per(a2.righe, spesa), i1 = per(a1.righe, r => r.valore > 0 && !investimento(r)), i2 = per(a2.righe, r => r.valore > 0 && !investimento(r));
+  const delta = (o1, o2) => [...new Set([...Object.keys(o1), ...Object.keys(o2)])].map(c => ({c, a:o1[c] || 0, b:o2[c] || 0, d:(o2[c] || 0) - (o1[c] || 0)}));
+  const dc = delta(c1, c2), su = dc.filter(x => x.d > 0).sort((p, q) => q.d - p.d).slice(0, 5), giu = dc.filter(x => x.d < 0).sort((p, q) => p.d - q.d).slice(0, 5);
+  const di = delta(i1, i2).filter(x => Math.abs(x.d) >= 50).sort((p, q) => Math.abs(q.d) - Math.abs(p.d)).slice(0, 4);
+  const piuGrandi = (L, cat) => L.filter(r => spesa(r) && r.tipologia === cat).sort((p, q) => p.valore - q.valore).slice(0, 3).map(r => `${esc(frase(r.descrizione))} ${fmt(-r.valore)}`).join(', ');
+  const n1 = new Set(a1.righe.map(r => String(r.data).slice(0, 7))).size || 1, n2 = new Set(a2.righe.map(r => String(r.data).slice(0, 7))).size || 1;
+  const mesiStrani = (() => { const M = []; for (let m = 0; m < 12; m++) { const Lm = a2.righe.filter(r => sameYM(r.data, y2, m)); if (Lm.length) M.push({m, u:uscite(Lm)}); }
+    const med = M.reduce((s, x) => s + x.u, 0) / (M.length || 1); return M.filter(x => x.u > med * 1.5).sort((p, q) => q.u - p.u).slice(0, 3).map(x => ({...x, med})); })();
+  const top = a2.righe.filter(spesa).sort((p, q) => p.valore - q.valore).slice(0, 6);
+  const riga = (t, s, v, cls) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${t}</span><span class="num ${cls || ''}">${v}</span></span>${s ? `<span class="row-sub">${s}</span>` : ''}</span></div>`;
+  const sg = d => (d > 0 ? '+' : d < 0 ? '−' : '') + eur0(Math.abs(d));
+  const domanda = `Confronta il ${y1} con il ${y2}. Entrate ${eur0(E1)} contro ${eur0(E2)}, uscite ${eur0(U1)} contro ${eur0(U2)} (mesi con dati: ${n1} e ${n2}). Categorie di spesa cresciute: ${su.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}; calate: ${giu.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}. Entrate cambiate: ${di.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}. Controlli sui dati del ${y2}: ${controlliAnno(a2).map(t => t.replace(/<[^>]+>/g, '')).join(' ') || 'nessun problema'}. Spiegami in poche righe dove ho perso o guadagnato di più, perché, e quali di queste differenze dipendono da come ho registrato i dati.`;
+  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>Perché è cambiato</h2><span></span></div>
+  <div class="sheet-scroll">
+    <div class="chips" style="margin-top:8px">${anni.slice(0, -1).map(y => `<button class="chip ${y === y1 ? 'on' : ''}" onclick="apriPerche(${y},${y2})">${y}</button>`).join('')}<span class="muted" style="align-self:center;padding:0 4px">contro</span>${anni.slice(1).map(y => `<button class="chip ${y === y2 ? 'on' : ''}" onclick="apriPerche(${y1},${y})">${y}</button>`).join('')}</div>
+    <div class="stat3"><div><small>Entrate</small><b class="${E2 >= E1 ? 'pos' : 'neg'}">${sg(E2 - E1)}</b></div><div><small>Uscite</small><b class="${U2 <= U1 ? 'pos' : 'neg'}">${sg(U2 - U1)}</b></div><div><small>Risparmio</small><b class="${(E2 - U2) >= (E1 - U1) ? 'pos' : 'neg'}">${sg((E2 - U2) - (E1 - U1))}</b></div></div>
+    <p class="note" style="margin:0 8px 16px">${y1}: ${eur0(E1)} entrate, ${eur0(U1)} uscite in ${n1} mesi. ${y2}: ${eur0(E2)} entrate, ${eur0(U2)} uscite in ${n2} mesi. Media mensile delle uscite: ${eur0(U1 / n1)} contro ${eur0(U2 / n2)}.</p>
+    ${su.length ? `<p class="sublabel">Dove hai speso di più</p><div class="list">${su.map(x => riga(esc(nome(x.c)), `${eur0(x.a)} nel ${y1}, ${eur0(x.b)} nel ${y2}${piuGrandi(a2.righe, x.c) ? `. Le più grandi: ${piuGrandi(a2.righe, x.c)}` : ''}`, sg(x.d), 'neg')).join('')}</div>` : ''}
+    ${giu.length ? `<p class="sublabel">Dove hai risparmiato</p><div class="list">${giu.map(x => riga(esc(nome(x.c)), `${eur0(x.a)} nel ${y1}, ${eur0(x.b)} nel ${y2}`, sg(x.d), 'pos')).join('')}</div>` : ''}
+    ${di.length ? `<p class="sublabel">Entrate cambiate</p><div class="list">${di.map(x => riga(esc(nome(x.c)), `${eur0(x.a)} nel ${y1}, ${eur0(x.b)} nel ${y2}`, sg(x.d), x.d > 0 ? 'pos' : 'neg')).join('')}</div>` : ''}
+    ${mesiStrani.length ? `<p class="sublabel">Mesi fuori dal normale nel ${y2}</p><div class="list">${mesiStrani.map(x => riga(mese(x.m), `una volta e mezza la media del ${y2} (${eur0(x.med)})`, eur0(x.u), 'warn')).join('')}</div>` : ''}
+    <p class="sublabel">Le uscite più grandi del ${y2}</p><div class="list">${top.map(r => riga(esc(frase(r.descrizione) || nome(r.tipologia)), `${esc(nome(r.tipologia))}, ${giornoBreve(r.data)}`, fmt(-r.valore))).join('')}</div>
+    <p class="sublabel">Cosa può falsare il confronto</p>
+    <div class="list plain">${[...controlliAnno(a1).map(t => `<b>${y1}</b>: ${t}`), ...controlliAnno(a2).map(t => `<b>${y2}</b>: ${t}`)].map(t => `<div class="row"><span class="row-main"><span class="row-sub" style="color:var(--text)">${t}</span></span></div>`).join('') || '<p class="empty">Nessun problema trovato nei dati.</p>'}</div>
+    <button class="btn" style="margin-top:16px" onclick='closeSheet();go("consulente","push").then(()=>chiedi(${JSON.stringify(domanda).replace(/'/g, "&#39;")}))'>Chiedi al consulente di spiegarlo</button>
+  </div>`);
+}
+
+// ── BOLLETTE: luce e gas dal PDF o dalle foto, nella tabella TblBollette di GRAFICO BOLLETTE.xlsx (cartella ---SPESE UTENZE---)
+const cartellaUtenze = () => { const c = cartellaFile(); return c.slice(0, c.lastIndexOf('/')) + '/---SPESE UTENZE---'; };
+const percorsoGraph = p => p.split('/').map(encodeURIComponent).join('/');
+const UT = { gas: {nome:'Gas', unita:'Smc', segno:'---GAS---', desc:'BOLLETTA GAS'}, luce: {nome:'Luce', unita:'kWh', segno:'---EEE---', desc:'BOLLETTA CORRENTE ELETTRICA'} };
+let _fileBollette = null, bolletteCache = null, BL = { fase:'scelta' };
+async function idFileBollette(){
+  if (!_fileBollette) _fileBollette = (await apiGet(`/me/drive/root:/${percorsoGraph(cartellaUtenze() + '/GRAFICO BOLLETTE.xlsx')}`)).id;
+  return _fileBollette;
+}
+async function getBollette(){
+  if (bolletteCache) return bolletteCache;
+  const id = await idFileBollette();
+  const d = await apiGet(`/me/drive/items/${id}/workbook/tables/TblBollette/rows`);
+  bolletteCache = (d.value||[]).map(r => { const v = r.values[0]; return { ut:String(v[0]).toLowerCase(), anno:+v[1], mese:+v[2], da:parseDate(v[3]), al:parseDate(v[4]), consumo:+v[5]||0, unita:v[6], stimato:v[7]==='SI',
+    totale:+v[8]||0, tasse:+v[9]||0, materia:+v[10]||0, altri:+v[11]||0, eu:+v[12]||0, mu:+v[13]||0, indice:+v[14]||0, indiceNome:v[15], fattura:v[16], dataFattura:parseDate(v[17]), file:v[18], note:v[19] }; })
+    .filter(b => b.anno && b.mese && (b.ut === 'gas' || b.ut === 'luce'));
+  return bolletteCache;
+}
+const chiaveMese = (a, m) => a * 12 + m - 1;
+const bollettaDi = (L, ut, a, m) => L.find(b => b.ut === ut && b.anno === a && b.mese === m);
+const varPct = (a, b) => a != null && b ? a / b - 1 : null;
+const etichettaVar = v => v == null ? '' : `<span class="${v > 0.02 ? 'neg' : v < -0.02 ? 'pos' : 'muted'}">${v > 0 ? '+' : v < 0 ? '−' : ''}${nf0.format(Math.abs(v * 100))}%</span>`;
+
+async function vBollette(){
+  let L = [], errore = '';
+  try { L = await getBollette(); } catch(e) { errore = String(e.message).slice(0, 160); }
+  const ultimo = ut => L.filter(b => b.ut === ut).sort((a, b) => chiaveMese(b.anno, b.mese) - chiaveMese(a.anno, a.mese))[0];
+  const scheda = ut => {
+    const b = ultimo(ut); if (!b) return '';
+    const pm = b.mese === 1 ? [b.anno - 1, 12] : [b.anno, b.mese - 1], prima = bollettaDi(L, ut, ...pm), anno = bollettaDi(L, ut, b.anno - 1, b.mese);
+    return `<div class="row"><span class="ic">${ico(ut === 'gas' ? 'Flame' : 'Zap')}</span><span class="row-main"><span class="row-line"><span class="row-title">${UT[ut].nome}, ${mese(b.mese - 1).toLowerCase()} ${b.anno}</span><span class="num">${fmt(b.totale)}</span></span>
+      <span class="row-sub num">${nf.format(b.consumo)} ${UT[ut].unita}${b.stimato ? ' stimati' : ''}, ${nf.format(b.eu)} €/${UT[ut].unita}</span>
+      <span class="row-sub">${prima ? `Rispetto al mese prima ${etichettaVar(varPct(b.totale, prima.totale))}` : 'Mese prima senza bolletta'}${anno ? `, a un anno fa ${etichettaVar(varPct(b.totale, anno.totale))}` : ''}</span></span></div>`;
+  };
+  const mesiOrd = [...new Set(L.map(b => chiaveMese(b.anno, b.mese)))].sort((a, b) => b - a);
+  return `<h1 class="lt">Bollette</h1>
+  <label class="drop" id="dropBol">${ico('FileUp')}<b>Carica una bolletta</b><span>PDF, oppure foto delle pagine (anche più insieme)</span><input type="file" accept="application/pdf,.pdf,image/*" multiple onchange="leggiBolletta(this.files);this.value=''"></label>
+  ${BL.fase === 'lettura' ? `<div class="card" style="margin-top:16px"><div class="loading" style="padding:16px 0"><span class="spinner"></span>Claude sta leggendo la bolletta</div></div>` : ''}
+  ${BL.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>${esc(BL.errore)}</span></p>` : ''}
+  <p class="note">La bolletta viene letta da Claude (5-9 centesimi), controlli i valori, poi va nel file GRAFICO BOLLETTE e il PDF nella cartella delle utenze.</p>
+  ${errore ? `<p class="avviso">${ico('TriangleAlert')}<span>Non riesco a leggere GRAFICO BOLLETTE: ${esc(errore)}</span></p>` : ''}
+  ${L.length ? `<div class="cols"><div>
+    <h2 class="gh">Ultime bollette</h2><div class="list">${scheda('luce')}${scheda('gas')}</div>
+    <h2 class="gh">Mese per mese</h2>
+    ${seg([['costo','Costo'],['gas','Consumo gas'],['luce','Consumo luce'],['prezzo','Prezzo']], S.bolGraf || 'costo', 'setBolGraf')}
+    <div class="card">${graficoBollette(L, S.bolGraf || 'costo')}</div>
+  </div><div>
+    <h2 class="gh">Tutte</h2>
+    <div class="list">${mesiOrd.slice(0, 36).map(k => { const a = Math.floor(k / 12), m = k % 12 + 1, g = bollettaDi(L, 'gas', a, m), l = bollettaDi(L, 'luce', a, m);
+      return `<button class="row" onclick="apriMeseBollette(${a},${m})"><span class="row-main"><span class="row-line"><span class="row-title">${mese(m - 1)} ${a}</span><span class="num">${fmt((g ? g.totale : 0) + (l ? l.totale : 0))}</span></span>
+      <span class="row-sub num">${l ? `luce ${nf0.format(l.consumo)} kWh, ${fmt(l.totale)}` : 'luce senza bolletta'}; ${g ? `gas ${nf.format(g.consumo)} Smc, ${fmt(g.totale)}` : 'gas senza bolletta'}</span></span>${chev()}</button>`; }).join('')}</div>
+    <p class="note">Il mese è quello dei consumi fatturati, non quello in cui arriva la bolletta.</p>
+  </div></div>` : ''}`;
+}
+function setBolGraf(v){ S.bolGraf = v; render(); }
+function dopoBollette(){
+  const z = $('#dropBol'); if (!z) return;
+  z.ondragover = e => { e.preventDefault(); z.classList.add('su'); };
+  z.ondragleave = () => z.classList.remove('su');
+  z.ondrop = e => { e.preventDefault(); z.classList.remove('su'); leggiBolletta(e.dataTransfer.files); };
+}
+// ultimi 13 mesi: costo di luce e gas, consumi, prezzo della materia prima contro l'indice
+function graficoBollette(L, tipo){
+  const fine = Math.max(...L.map(b => chiaveMese(b.anno, b.mese))), K = []; for (let k = fine - 12; k <= fine; k++) K.push(k);
+  const val = (ut, k, f) => { const b = bollettaDi(L, ut, Math.floor(k / 12), k % 12 + 1); return b ? f(b) : null; };
+  const serie = tipo === 'costo' ? [['luce', 'var(--bar-warn)', b => b.totale, 'Luce €'], ['gas', 'var(--line-2)', b => b.totale, 'Gas €']]
+    : tipo === 'gas' ? [['gas', 'var(--line-2)', b => b.consumo, 'Gas Smc']] : tipo === 'luce' ? [['luce', 'var(--bar-warn)', b => b.consumo, 'Luce kWh']]
+    : [['gas', 'var(--line-2)', b => b.mu, 'Gas materia €/Smc'], ['gas', 'var(--text-3)', b => b.indice || null, 'Indice PSV']];
+  const dati = serie.map(([ut, col, f, nome]) => ({col, nome, v: K.map(k => val(ut, k, f))}));
+  const W = 344, H = 184, Lm = 48, B = 24, T = 8, w = W - Lm, h = H - B - T;
+  const tutti = dati.flatMap(d => d.v.filter(x => x != null)), mx = Math.max(...tutti, 0.0001);
+  const dec = mx < 2 ? 2 : 0, step = mx / 4, top = mx * 1.1;
+  const X = i => Lm + (i + .5) * w / K.length, Yp = v => T + h - v / top * h;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bollette mese per mese">`;
+  for (let k = 0; k <= 4; k++) { const v = step * k; s += `<line x1="${Lm}" x2="${W}" y1="${Yp(v)}" y2="${Yp(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${Lm-8}" y="${Yp(v)+4}" text-anchor="end">${nf.format(v).replace(dec ? /$/ : /,\d+$/, '')}</text>`; }
+  dati.forEach(d => {
+    let p = '', su = false; d.v.forEach((v, i) => { if (v == null) { su = false; return; } p += (su ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Yp(v).toFixed(1) + ' '; su = true; });
+    s += `<path d="${p}" fill="none" stroke="${d.col}" stroke-width="1.75" stroke-linejoin="round"/>`;
+    d.v.forEach((v, i) => { if (v != null) s += `<circle cx="${X(i).toFixed(1)}" cy="${Yp(v).toFixed(1)}" r="2.5" fill="var(--card)" stroke="${d.col}" stroke-width="1.5"/>`; });
+  });
+  K.forEach((k, i) => { if (i % 2 === 0) s += `<text x="${X(i)}" y="${H-4}" text-anchor="middle">${mese(k % 12).slice(0, 3).toLowerCase()}</text>`; });
+  return s + `</svg><div class="key">${dati.map(d => `<span style="--c:${d.col}"><i></i>${d.nome}</span>`).join('')}</div>`;
+}
+async function apriMeseBollette(a, m){
+  const L = await getBollette(), voci = L.filter(b => b.anno === a && b.mese === m);
+  const riga = (l, v) => `<div class="row"><span class="row-main"><span class="row-line"><span>${l}</span><span class="muted num">${v}</span></span></span></div>`;
+  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>${mese(m - 1)} ${a}</h2><span></span></div>
+  <div class="sheet-scroll">${voci.map(b => `<p class="sublabel">${UT[b.ut].nome}, dal ${giornoBreve(b.da)} al ${giornoBreve(b.al)}</p>
+    <div class="list plain">${riga('Consumo', `${nf.format(b.consumo)} ${UT[b.ut].unita}${b.stimato ? ' (stimati)' : ''}`)}${riga('Totale', fmt(b.totale))}${riga('Tasse', fmt(b.tasse))}${riga('Materia prima', fmt(b.materia))}${riga('Altri oneri', fmt(b.altri))}
+    ${riga(`Costo per ${UT[b.ut].unita}`, nf.format(b.eu) + ' €')}${b.indice ? riga(`Materia contro indice ${b.indiceNome || ''}`, `${nf.format(b.mu)} € / ${nf.format(b.indice)} €`) : ''}${b.fattura ? riga('Fattura', esc(b.fattura)) : ''}</div>
+    ${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}`).join('')}
+    ${voci[0] && voci[0].file ? `<button class="btn soft" style="margin-top:16px" onclick="apriPdfBolletta(${esc(JSON.stringify(voci[0].file))})">Apri la bolletta</button>` : ''}
+  </div>`);
+}
+async function apriPdfBolletta(nomeFile){
+  try { const f = await apiGet(`/me/drive/root:/${percorsoGraph(cartellaUtenze() + '/' + nomeFile)}`); window.open(f.webUrl, '_blank', 'noopener'); }
+  catch(e) { toast('Non trovo il file ' + nomeFile); }
+}
+
+// lettura e revisione
+async function leggiBolletta(scelti){
+  const tutti = [...(scelti||[])]; if (!tutti.length) return;
+  const pdf = tutti.find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf'), foto = tutti.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+  if (!pdf && !foto.length) { BL = {fase:'scelta', errore:'Scegli un PDF o delle foto della bolletta.'}; render(); return; }
+  if (pdf && pdf.size > 25e6) { BL = {fase:'scelta', errore:'Il PDF supera i 25 MB.'}; render(); return; }
+  BL = {fase:'lettura'}; if (S.view === 'bollette') render();
+  try {
+    let corpo, allegati;
+    if (pdf) { corpo = {tipo:'pdf', dati: await aBase64(pdf)}; allegati = [{blob:pdf, est:'pdf', tipo:'application/pdf'}]; }
+    else { const pezzi = (await Promise.all(foto.slice(0, 12).map(comprimi))); corpo = {tipo:'immagini', dati: await Promise.all(pezzi.flatMap(p => p.pezzi).slice(0, 12).map(aBase64))}; allegati = pezzi.map(p => ({blob:p.archivio, est:'jpg', tipo:'image/jpeg'})); }
+    const [d, L, rows] = await Promise.all([leggiConClaude('/bolletta', corpo), getBollette().catch(() => []), getTransazioni().catch(() => [])]);
+    if (!d.leggibile || !(d.utenze||[]).length) throw new Error('non sembra una bolletta di luce o gas');
+    d.utenze.forEach(u => {
+      const da = isoValida(u.periodo_da) ? u.periodo_da : (d.data_emissione || oggiIso());
+      u.anno = +da.slice(0, 4); u.mese = +da.slice(5, 7);
+      u.esiste = !!bollettaDi(L, u.tipo, u.anno, u.mese); u.salva = !u.esiste;
+      u.spesa = spesaBolletta(u, d, rows); u.aggiungi = !u.spesa && annoDaData(d) === annoFile();
+    });
+    BL = {fase:'revisione', d, allegati, costo:d.costo};
+    openSheet(''); disegnaBolletta();
+  } catch(e) { BL = {fase:'scelta', errore:'Non sono riuscito a leggerla: ' + (e.message || e)}; }
+  if (S.view === 'bollette') render();
+}
+const dataSpesa = d => isoValida(d.scadenza) ? d.scadenza : isoValida(d.data_emissione) ? d.data_emissione : oggiIso();
+const annoDaData = d => +dataSpesa(d).slice(0, 4);
+// la spesa nel file dei costi: stesso importo, descrizione col segno ---EEE--- o ---GAS---, entro 40 giorni dalla bolletta
+function spesaBolletta(u, d, rows){
+  const rif = dataSpesa(d);
+  return rows.filter(r => r.valore < 0 && Math.abs(-r.valore - u.totale) < 0.01 && r.data && giorniTra(r.data, rif) <= 40 && String(r.descrizione||'').toUpperCase().includes(UT[u.tipo].segno))
+    .sort((a, b) => giorniTra(a.data, rif) - giorniTra(b.data, rif))[0] || null;
+}
+function disegnaBolletta(){
+  const d = BL.d; if (!d) return;
+  const L = bolletteCache || [];
+  const campo = (i, k, lab, un) => `<label class="row"><span>${lab}</span><input class="field" inputmode="decimal" value="${String(d.utenze[i][k]).replace('.', ',')}" onchange="modBolletta(${i},'${k}',this.value)"><span class="muted" style="font-size:13px">${un}</span></label>`;
+  const opz = (i, k, testo, sub) => `<button class="row" onclick="BL.d.utenze[${i}].${k}=!BL.d.utenze[${i}].${k};disegnaBolletta()"><span class="check ${d.utenze[i][k] ? 'on' : ''}">${d.utenze[i][k] ? ico('Check') : ''}</span><span class="row-main"><span class="row-title">${testo}</span>${sub ? `<span class="row-sub">${sub}</span>` : ''}</span></button>`;
+  $('#sheet').innerHTML = `<div class="grab"></div><div class="sheet-head" data-bol><button class="link" onclick="closeSheet()">Annulla</button><h2>Bolletta</h2><span></span></div>
+  <div class="sheet-scroll">
+    <p class="tx-desc" style="margin-top:8px">${esc(d.fornitore || 'Bolletta')}${d.numero ? `, n. ${esc(d.numero)}` : ''}${isoValida(d.data_emissione) ? `, del ${giornoBreve(d.data_emissione)} ${d.data_emissione.slice(0, 4)}` : ''}. Da pagare ${fmt(d.totale_da_pagare || 0)}.</p>
+    ${d.utenze.map((u, i) => {
+      const pm = u.mese === 1 ? [u.anno - 1, 12] : [u.anno, u.mese - 1], prima = bollettaDi(L, u.tipo, ...pm), anno = bollettaDi(L, u.tipo, u.anno - 1, u.mese);
+      const somma = Math.round((u.tasse + u.quota_consumi) * 100) / 100;
+      return `<p class="sublabel">${UT[u.tipo].nome}, consumi di ${mese(u.mese - 1).toLowerCase()} ${u.anno}${isoValida(u.periodo_da) ? ` (dal ${giornoBreve(u.periodo_da)} al ${giornoBreve(u.periodo_al)})` : ''}</p>
+      <div class="list plain">${campo(i, 'consumo', 'Consumo', UT[u.tipo].unita)}${campo(i, 'totale', 'Totale', '€')}${campo(i, 'tasse', 'Accise e IVA', '€')}${campo(i, 'quota_consumi', 'Materia prima', '€')}${campo(i, 'indice', `Indice ${u.indice_nome || ''}`, `€/${UT[u.tipo].unita}`)}</div>
+      ${somma > u.totale + 0.01 ? `<p class="avviso">${ico('TriangleAlert')}<span>Tasse e materia prima superano il totale: controlla i valori.</span></p>` : ''}
+      <p class="note">${prima ? `Mese prima: ${fmt(prima.totale)}, ${nf.format(prima.consumo)} ${UT[u.tipo].unita} (totale ${etichettaVar(varPct(u.totale, prima.totale))}, consumo ${etichettaVar(varPct(u.consumo, prima.consumo))}). ` : 'Del mese prima non c\'è la bolletta. '}${anno ? `Un anno fa: ${fmt(anno.totale)} (${etichettaVar(varPct(u.totale, anno.totale))}).` : ''}</p>
+      <div class="list" style="margin-top:8px">
+        ${opz(i, 'salva', 'Salva in GRAFICO BOLLETTE', u.esiste ? `Attenzione: ${mese(u.mese - 1).toLowerCase()} ${u.anno} c'è già, la aggiungerei una seconda volta` : '')}
+        ${u.spesa ? `<div class="row"><span class="ic">${ico('Check')}</span><span class="row-main"><span class="row-title">Spesa già nel file dei costi</span><span class="row-sub">${esc(frase(u.spesa.descrizione))}, ${giornoBreve(u.spesa.data)}</span></span></div>`
+          : annoDaData(d) === annoFile() ? opz(i, 'aggiungi', 'Aggiungi la spesa nel file dei costi', `${UT[u.tipo].segno} ${UT[u.tipo].desc} ${MESI_IT[+dataSpesa(d).slice(5, 7) - 1]} ${dataSpesa(d).slice(0, 4)}, ${fmt(u.totale)}`)
+          : `<p class="note" style="margin:8px 16px">La spesa è del ${annoDaData(d)}: va nel file di quell'anno.</p>`}
+      </div>`; }).join('')}
+  </div>
+  <div class="sheet-foot"><button class="btn" id="btnBol" onclick="salvaBolletta()">Salva</button></div>`;
+}
+function modBolletta(i, k, v){ BL.d.utenze[i][k] = parseFloat(String(v).replace(',', '.')) || 0; disegnaBolletta(); }
+async function salvaBolletta(){
+  const d = BL.d, b = $('#btnBol'); if (!d) return;
+  const daSalvare = d.utenze.filter(u => u.salva), spese = d.utenze.filter(u => u.aggiungi && !u.spesa);
+  if (!daSalvare.length && !spese.length) { toast('Niente da salvare: spunta almeno una voce'); return; }
+  if (b) { b.disabled = true; b.textContent = 'Salvataggio…'; }
+  try {
+    // il file nella cartella delle utenze, senza sovrascrivere quelli che ci sono già
+    const ref = isoValida(d.data_emissione) ? d.data_emissione : oggiIso(), m = +ref.slice(5, 7);
+    const quali = d.utenze.length > 1 ? 'GAS-LUCE' : d.utenze[0].tipo === 'gas' ? 'GAS' : 'LUCE';
+    const base = `BOLLETTA ${quali} ${ref.slice(0, 4)} - ${String(m).padStart(2, '0')} (${MESI_IT[m - 1]})`;
+    let nomeFile = BL.nomeFile || '';
+    for (const [k, a] of (BL.allegati||[]).entries()) {
+      await getToken();
+      const nome = base + (BL.allegati.length > 1 ? ` - pag ${k + 1}` : '') + '.' + a.est;
+      const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${percorsoGraph(cartellaUtenze() + '/' + nome)}:/content?@microsoft.graph.conflictBehavior=rename`, {method:'PUT', headers:{Authorization:'Bearer ' + accessToken, 'Content-Type':a.tipo}, body:a.blob});
+      if (!res.ok) throw new Error(await res.text());
+      if (!nomeFile) nomeFile = (await res.json()).name || nome;
+    }
+    BL.allegati = []; BL.nomeFile = nomeFile;
+    if (daSalvare.length) {
+      const id = await idFileBollette();
+      await apiPost(`/me/drive/items/${id}/workbook/tables/TblBollette/rows`, {values: daSalvare.map(u => [u.tipo === 'gas' ? 'GAS' : 'LUCE', u.anno, u.mese, u.periodo_da || '', u.periodo_al || '', u.consumo, UT[u.tipo].unita, u.stimato ? 'SI' : '',
+        u.totale, u.tasse, u.quota_consumi, Math.round((u.totale - u.tasse - u.quota_consumi) * 100) / 100, u.consumo ? Math.round(u.totale / u.consumo * 1e6) / 1e6 : '', u.consumo ? Math.round(u.quota_consumi / u.consumo * 1e6) / 1e6 : '',
+        u.indice || '', u.indice ? u.indice_nome : '', d.numero || '', d.data_emissione || '', nomeFile, 'caricata dall\'app'])});
+      daSalvare.forEach(u => u.salva = false);
+    }
+    if (spese.length) {
+      const cfg = getConfig(), rows = cachedRows || [], dt = dataSpesa(d), mm = MESI_IT[+dt.slice(5, 7) - 1];
+      await apiPost(`${wb()}/tables/${cfg.tableName}/rows`, {values: spese.map(u => {
+        const ult = [...rows].reverse().find(r => String(r.descrizione||'').toUpperCase().includes(UT[u.tipo].segno));
+        return ['USCITA', 'CASA', -Math.abs(u.totale), (ult && ult.cadenza) || 'MENSILE', `${UT[u.tipo].segno} ${UT[u.tipo].desc} ${mm} ${dt.slice(0, 4)}`, (ult && ult.metodo) || 'ELETTRONICO', (ult && ult.mezzo) || 'ADDEBITO CONTO', dt, mm];
+      })});
+      spese.forEach(u => u.aggiungi = false); invalidateCache();
+    }
+    bolletteCache = null; closeSheet(); BL = {fase:'scelta'}; toast('Bolletta salvata');
+  } catch(e) { toast('Errore: ' + String(e.message).slice(0, 160)); if (b) { b.disabled = false; b.textContent = 'Riprova'; } return; }
+  if (S.view === 'bollette') render();
 }
 
 // ── IMPOSTAZIONI ──────────────────────────────────────────────
