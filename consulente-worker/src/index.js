@@ -22,7 +22,9 @@ const MEZZI = ["CARTA DI CREDITO", "ADDEBITO CONTO", "BONIFICO", "ACCREDITO CONT
 
 const SYSTEM_SCONTRINO = `Leggi la foto di uno scontrino italiano e compila lo schema.
 - data AAAA-MM-GG, ora HH:MM; stringa vuota se non si leggono.
-- totale: l'importo pagato, dopo gli sconti. pagamento: contanti, carta (bancomat, POS, carta di credito, Apple Pay, Google Pay), altro o sconosciuto.
+- totale: il TOTALE COMPLESSIVO dello scontrino dopo gli sconti, cioè quanto valgono tutti gli articoli. pagato: la parte pagata con carta o contanti, senza buoni pasto o ticket; uguale al totale se non ci sono buoni.
+- pagamento: contanti, carta (bancomat, POS, carta di credito, Apple Pay, Google Pay), altro o sconosciuto.
+- Se ci sono più foto sono pezzi consecutivi dello stesso scontrino, dall'alto in basso, tagliati fra una riga e l'altra: leggili come un unico scontrino.
 - Un articolo per ogni riga di prodotto. prezzo: quanto si è pagato per quella riga, quantità compresa e sconti dell'articolo già tolti (lo sconto va anche in sconto). Uno sconto su tutto lo scontrino è un articolo "Sconto" con prezzo negativo, categoria Altro.
 - prodotto: nome chiaro in italiano, senza abbreviazioni, senza marca e senza formato ("SPAGH BAR N5 500G" -> prodotto "Spaghetti n.5", marca "Barilla", contenuto 0.5 kg). Se il prodotto è tra i PRODOTTI GIÀ USATI, riusa esattamente quel nome e quella sottocategoria.
 - sottocategoria: breve e minuscola, riusando quelle già usate (per esempio pasta e riso, pane e sostituti, cereali e colazione, carne, pesce, salumi, formaggi, latte e yogurt, uova, frutta, verdura, surgelati, conserve e sughi, olio e condimenti, farina e zucchero, dolci e snack, caffè e tè, acqua, bibite e succhi, birra e vino, detersivi, carta e casa, igiene personale).
@@ -41,11 +43,15 @@ const SYSTEM_ESTRATTO = `Leggi un estratto conto (conto corrente o carta) e rest
 - categoria: la categoria del bilancio più adatta, guardando gli ESEMPI delle voci già registrate.
 - Escludi saldi, totali e righe che non sono movimenti. tipo_estratto: conto o carta. conto: banca e conto o carta, se scritti.`;
 
+const SYSTEM_CATEGORIZZA = `Ricevi movimenti di un estratto conto, uno per riga e numerati, e per ognuno, nello stesso ordine, compili lo schema.
+- descrizione: nome breve e leggibile della controparte o dell'operazione ("Conad Chiari", "Bonifico a Mario Rossi", "Netflix"), senza codici, numeri di carta o IBAN.
+- mezzo, tipo e categoria con le stesse regole: carta o POS e prelievo -> CARTA DI DEBITO; addebito diretto (SDD, RID, utenze) -> ADDEBITO CONTO; bonifico in uscita -> BONIFICO; bonifico in entrata e stipendio -> ACCREDITO CONTO; giroconto -> ALTRO TRASFERIMENTO. tipo: normale, saldo_carta (addebito mensile della carta di credito), giroconto (tra conti della stessa persona), commissione (spese, bolli, interessi). La categoria della banca, se c'è, è solo un indizio: scegli fra le categorie del bilancio guardando gli ESEMPI delle voci già registrate.`;
+
 const oggetto = (props) => ({ type: "object", properties: props, required: Object.keys(props), additionalProperties: false });
 const schemaScontrino = (cats) => oggetto({
   leggibile: { type: "boolean" },
   negozio: { type: "string" }, data: { type: "string" }, ora: { type: "string" },
-  totale: { type: "number" },
+  totale: { type: "number" }, pagato: { type: "number" },
   pagamento: { type: "string", enum: ["contanti", "carta", "altro", "sconosciuto"] },
   categoria_spesa: { type: "string", enum: cats },
   articoli: { type: "array", items: oggetto({
@@ -62,6 +68,14 @@ const schemaEstratto = (cats) => oggetto({
   movimenti: { type: "array", items: oggetto({
     data: { type: "string" }, importo: { type: "number" },
     descrizione: { type: "string" }, originale: { type: "string" },
+    mezzo: { type: "string", enum: MEZZI },
+    tipo: { type: "string", enum: ["normale", "saldo_carta", "giroconto", "commissione"] },
+    categoria: { type: "string", enum: cats },
+  }) },
+});
+const schemaCategorizza = (cats) => oggetto({
+  voci: { type: "array", items: oggetto({
+    n: { type: "integer" }, descrizione: { type: "string" },
     mezzo: { type: "string", enum: MEZZI },
     tipo: { type: "string", enum: ["normale", "saldo_carta", "giroconto", "commissione"] },
     categoria: { type: "string", enum: cats },
@@ -100,14 +114,26 @@ async function leggi(env, system, content, schema, effort, max_tokens) {
 
 async function scontrino(body, env) {
   const tipi = ["image/jpeg", "image/png", "image/webp"];
-  if (!tipi.includes(body.media_type) || typeof body.immagine !== "string" || !body.immagine) throw new ErroreLettura("Manca la foto dello scontrino.");
+  const foto = (Array.isArray(body.immagini) ? body.immagini : [body.immagine]).filter(x => typeof x === "string" && x).slice(0, 8);
+  if (!tipi.includes(body.media_type) || !foto.length) throw new ErroreLettura("Manca la foto dello scontrino.");
   const cats = pulisciCategorie(body.categorie);
   if (!cats.length) throw new ErroreLettura("Mancano le categorie del bilancio.");
   const noti = `PRODOTTI GIÀ USATI (prodotto | marca | sottocategoria):\n${elenco(body.prodotti, 400) || "nessuno"}\n\nSOTTOCATEGORIE GIÀ USATE: ${elenco(body.sottocategorie, 100).replace(/\n/g, ", ") || "nessuna"}`;
   return leggi(env, SYSTEM_SCONTRINO, [
-    { type: "image", source: { type: "base64", media_type: body.media_type, data: body.immagine } },
-    { type: "text", text: noti },
+    ...foto.map(data => ({ type: "image", source: { type: "base64", media_type: body.media_type, data } })),
+    { type: "text", text: (foto.length > 1 ? `Scontrino in ${foto.length} pezzi, dall'alto in basso.\n\n` : "") + noti },
   ], schemaScontrino(cats), "medium", 16000);
+}
+
+// estratti in tabella: l'app legge le colonne da sola e manda qui solo i movimenti da aggiungere
+async function categorizza(body, env) {
+  const cats = pulisciCategorie(body.categorie);
+  const voci = (Array.isArray(body.voci) ? body.voci : []).slice(0, 150).map((v, i) => `${i + 1}. ${String(v).slice(0, 300)}`);
+  if (!cats.length || !voci.length) throw new ErroreLettura("Mancano i movimenti o le categorie.");
+  return leggi(env, SYSTEM_CATEGORIZZA, [
+    { type: "text", text: `MOVIMENTI (data | importo | testo della banca | categoria della banca):\n${voci.join("\n")}` },
+    { type: "text", text: `ESEMPI dalle voci già registrate (descrizione | categoria):\n${elenco(body.esempi, 300) || "nessuno"}` },
+  ], schemaCategorizza(cats), "low", 32000);
 }
 
 async function estratto(body, env) {
@@ -160,9 +186,10 @@ export default {
     try { body = await req.json(); } catch { return risposta("Richiesta non valida", 400, h); }
 
     const percorso = new URL(req.url).pathname;
-    if (percorso === "/scontrino" || percorso === "/estratto") {
+    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza };
+    if (lettori[percorso]) {
       const json = (o, stato) => new Response(JSON.stringify(o), { status: stato, headers: { ...h, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
-      try { return json(await (percorso === "/scontrino" ? scontrino : estratto)(body, env), 200); }
+      try { return json(await lettori[percorso](body, env), 200); }
       catch (e) {
         console.error("errore lettura:", e && e.name, e && e.status, e && e.message);
         return json({ errore: messaggioErrore(e) }, e instanceof ErroreLettura ? 400 : 502);

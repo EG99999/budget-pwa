@@ -1,8 +1,8 @@
-const CACHE = 'budget-v10';
+const CACHE = 'budget-v11';
 const SHELL = [
   './',
   './index.html',
-  './icon.svg',
+  './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png',
   './manifest.json',
   'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js',
   'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js'

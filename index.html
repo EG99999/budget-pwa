@@ -9,7 +9,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="manifest" href="manifest.json">
 <title>Budget</title>
@@ -1520,7 +1521,7 @@ async function leggiConClaude(via, body){
 }
 
 // fogli SCONTRINI e ARTICOLI: creati la prima volta che si salva, mai sopra un foglio che ha già dati
-const TAB_SCONTRINI = { nome:'TblScontrini', foglio:'SCONTRINI', col:['ID','DATA','ORA','NEGOZIO','TOTALE','PAGAMENTO','ARTICOLI','FOTO','SPESA','CARICATO'] };
+const TAB_SCONTRINI = { nome:'TblScontrini', foglio:'SCONTRINI', col:['ID','DATA','ORA','NEGOZIO','TOTALE','PAGATO','PAGAMENTO','ARTICOLI','FOTO','SPESA','CARICATO'] };
 const TAB_ARTICOLI = { nome:'TblArticoli', foglio:'ARTICOLI', col:['ID_SCONTRINO','DATA','NEGOZIO','PRODOTTO','MARCA','CATEGORIA','SOTTOCATEGORIA','QUANTITA','UNITA','CONTENUTO','CONTENUTO_UNITA','PREZZO','SCONTO','PREZZO_UNITARIO','UNITA_PREZZO','TESTO'] };
 async function tabellaPronta(T){
   if (T.ok) return;
@@ -1544,7 +1545,7 @@ async function righeTabella(T){
 }
 let scontriniCache = null, articoliCache = null;
 async function getScontrini(){
-  if (!scontriniCache) scontriniCache = (await righeTabella(TAB_SCONTRINI)).map(v => ({id:String(v[0]), data:parseDate(v[1]), ora: typeof v[2]==='number' ? `${String(Math.floor(v[2]*24)).padStart(2,'0')}:${String(Math.round(v[2]*1440)%60).padStart(2,'0')}` : v[2], negozio:v[3], totale:+v[4]||0, pagamento:v[5], n:+v[6]||0, foto:v[7], spesa:v[8]}));
+  if (!scontriniCache) scontriniCache = (await righeTabella(TAB_SCONTRINI)).map(v => ({id:String(v[0]), data:parseDate(v[1]), ora: typeof v[2]==='number' ? `${String(Math.floor(v[2]*24)).padStart(2,'0')}:${String(Math.round(v[2]*1440)%60).padStart(2,'0')}` : v[2], negozio:v[3], totale:+v[4]||0, pagato:+v[5]||0, pagamento:v[6], n:+v[7]||0, foto:v[8], spesa:v[9]}));
   return scontriniCache;
 }
 async function getArticoli(){
@@ -1608,6 +1609,46 @@ async function testoDaFile(file){
   const w = XLSX.read(buf, {type:'array', cellDates:true});
   return w.SheetNames.map(n => `FOGLIO ${n}\n` + XLSX.utils.sheet_to_csv(w.Sheets[n], {FS:';', blankrows:false, dateNF:'yyyy-mm-dd'})).join('\n\n');
 }
+async function righeDaFile(file){
+  await caricaLibreriaExcel();
+  const csv = /\.csv$/i.test(file.name);
+  const w = csv ? XLSX.read(await testoDaFile(file), {type:'string', raw:true}) : XLSX.read(await file.arrayBuffer(), {type:'array'});
+  return w.SheetNames.flatMap(n => XLSX.utils.sheet_to_json(w.Sheets[n], {header:1, raw:true, defval:''}));
+}
+const numero = v => { if (typeof v === 'number') return v; let s = String(v ?? '').replace(/[€\s]/g, ''); if (!s || s === '-') return NaN; s = /,\d{1,2}$/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, ''); return parseFloat(s); };
+function dataIso(v){
+  if (typeof v === 'number') return v > 20000 && v < 80000 ? parseDate(v) : '';
+  const s = String(v ?? '').trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return `${m[1]}-${m[2]}-${m[3]}`;
+  if ((m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/))) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return '';
+}
+// riconosce l'intestazione (data, importo o entrate e uscite, descrizione) nelle prime 40 righe
+function movimentiDaTabella(R){
+  const norm = s => String(s ?? '').toLowerCase().replace(/[_\s]+/g, ' ').trim();
+  for (let h = 0; h < Math.min(R.length, 40); h++) {
+    const H = R[h].map(norm), trova = re => H.findIndex(c => re.test(c));
+    const iData = H.findIndex(c => /^data/.test(c) && !/valuta/.test(c)), iVal = trova(/^data.*valuta/);
+    const iImp = trova(/^(importo|amount|movimento)/), iIn = trova(/^(entrate|avere|accredit)/), iOut = trova(/^(uscite|dare|addebit)/);
+    if (iData < 0 || (iImp < 0 && (iIn < 0 || iOut < 0))) continue;
+    const iDesc = H.map((c, i) => /descr|causale|beneficiario|dettagl/.test(c) ? i : -1).filter(i => i >= 0), iBanca = trova(/moneymap|categoria/);
+    const mov = [];
+    for (const r of R.slice(h + 1)) {
+      const op = dataIso(r[iData]), va = iVal >= 0 ? dataIso(r[iVal]) : '';
+      if (!isoValida(op)) continue;
+      const imp = iImp >= 0 ? numero(r[iImp]) : (numero(r[iIn]) || 0) - Math.abs(numero(r[iOut]) || 0);
+      if (!imp || isNaN(imp)) continue;
+      const testo = iDesc.map(i => String(r[i] ?? '').trim()).filter(t => t && t !== '-').join(' ').replace(/\s+/g, ' ');
+      // per le carte la data dell'acquisto è la più vecchia fra operazione e valuta
+      // nome provvisorio, finché Claude non lo pulisce: senza numeri di carta, sigle SEPA e coda tecnica
+      const breve = testo.replace(/\b(multifunzione|contactless|chip|pagamento|pos|sepa direct debit)\b/gi, '').replace(/(\d{4}\s*)?(\*{2,}\s*)+\d{4}/g, '')
+        .split(/\b(addebito sdd|fattura|mand|iban|trn|data inserimento|canale|causale)\b/i)[0].replace(/\s+/g, ' ').trim();
+      mov.push({ data: isoValida(va) && va < op ? va : op, importo: Math.round(imp*100)/100, descrizione: breve.slice(0, 60) || 'Movimento', originale: testo.slice(0, 240), mezzo:'CARTA DI DEBITO', tipo:'normale', categoria:'', banca: iBanca >= 0 ? String(r[iBanca] ?? '') : '' });
+    }
+    if (mov.length) return mov;
+  }
+  return null;
+}
 async function leggiEstratto(file){
   if (!file) return;
   const pdf = /\.pdf$/i.test(file.name) || file.type==='application/pdf';
@@ -1619,11 +1660,27 @@ async function leggiEstratto(file){
     const rows = await getTransazioni();
     const esempi = [], visti = new Set();
     for (const r of [...rows].reverse()) { const d = String(r.descrizione||'').trim(); if (d && r.tipologia && !visti.has(d)) { visti.add(d); esempi.push(`${d} | ${r.tipologia}`); } if (esempi.length >= 300) break; }
-    const body = pdf ? {tipo:'pdf', dati: await aBase64(file)} : {tipo:'testo', dati: await testoDaFile(file)};
-    const j = await leggiConClaude('/estratto', {...body, categorie: tutteCat(rows), esempi});
-    const mov = (j.movimenti||[]).filter(m => isoValida(m.data) && m.importo);
+    // Excel e CSV: colonne lette qui, a Claude vanno solo i movimenti da aggiungere; PDF e tabelle sconosciute li legge Claude
+    let mov = null, conto = '', costo = 0;
+    if (!pdf) mov = movimentiDaTabella(await righeDaFile(file));
+    if (!mov) {
+      const j = await leggiConClaude('/estratto', {...(pdf ? {tipo:'pdf', dati: await aBase64(file)} : {tipo:'testo', dati: await testoDaFile(file)}), categorie: tutteCat(rows), esempi});
+      mov = (j.movimenti||[]).filter(m => isoValida(m.data) && m.importo).map(m => ({...m, pronto:true}));
+      conto = j.conto; costo = j.costo || 0;
+    }
     if (!mov.length) throw new Error('nel file non ho trovato movimenti');
-    ES = { fase:'risultato', tipo:ES.tipo, nome:file.name, conto:j.conto, costo:j.costo, r: riconcilia(mov, rows, ES.tipo), aperti:{} };
+    const r = riconcilia(mov, rows, ES.tipo);
+    const daFare = r.mancanti.filter(m => !m.pronto && !m.altroAnno);
+    for (let i = 0; i < daFare.length; i += 100) {
+      if (S.view==='estratto') { const el = $('#content .loading'); if (el) el.lastChild.textContent = `Claude propone nome e categoria di ${daFare.length} movimenti da aggiungere`; }
+      const parte = daFare.slice(i, i + 100);
+      try {
+        const j = await leggiConClaude('/categorizza', { voci: parte.map(m => `${m.data} | ${nf.format(m.importo)} | ${m.originale} | ${m.banca || '-'}`), categorie: tutteCat(rows), esempi });
+        costo += j.costo || 0;
+        (j.voci||[]).forEach(v => { const m = parte[v.n - 1]; if (m) Object.assign(m, {descrizione:v.descrizione || m.descrizione, cat:v.categoria, mezzo:v.mezzo, tipo:v.tipo, sel: v.tipo === 'normale' && !m.annulla && !m.dentro, pronto:true}); });
+      } catch(e) { ES.avviso = 'Nomi e categorie non proposti (' + e.message + '): scegli tu la categoria.'; }
+    }
+    ES = { fase:'risultato', tipo:ES.tipo, nome:file.name, conto, costo, avviso:ES.avviso, r, aperti:{} };
     if (S.view!=='estratto') toast('Estratto letto: aprilo da Analisi');
   } catch(e) {
     ES = { fase:'scelta', tipo:ES.tipo, errore: 'Non sono riuscito a leggerlo: ' + (e.message || e) };
@@ -1631,34 +1688,76 @@ async function leggiEstratto(file){
   }
   if (S.view==='estratto') render();
 }
-// abbina i movimenti della banca alle voci del file: prima stesso importo entro 5 giorni, poi importo diverso (fino al 20%) con data vicina e nome simile
+// cerca fino a max elementi la cui somma in centesimi fa l'obiettivo (ricerca limitata, i più grandi per primi)
+function sottoinsieme(items, cent, obiettivo, max){
+  const L = items.map(x => [x, cent(x)]).filter(x => x[1] > 0 && x[1] <= obiettivo).sort((a, b) => b[1] - a[1]);
+  let passi = 0, trovato = null;
+  const cerca = (i, resto, scelti) => {
+    if (resto === 0) { if (scelti.length >= 2) trovato = scelti.slice(); return; }
+    if (scelti.length >= max || ++passi > 20000) return;
+    for (let k = i; k < L.length && !trovato; k++) if (L[k][1] <= resto) { scelti.push(L[k][0]); cerca(k + 1, resto - L[k][1], scelti); scelti.pop(); }
+  };
+  cerca(0, obiettivo, []);
+  return trovato;
+}
+// abbina i movimenti della banca alle voci del file, dal più sicuro al meno sicuro:
+// stesso importo entro 5 giorni; stesso importo entro 20 giorni con nome simile; un movimento diviso in più voci dello stesso giorno (bollette);
+// più movimenti riuniti in una voce (spese di una gita); infine importo diverso fino al 20% con data vicina
 function riconcilia(mov, rows, tipo){
   const B = mov.map((m, i) => ({...m, i})), anno = annoFile();
   const P = B.filter(m => +m.data.slice(0,4) === anno), Q = P.length ? P : B; // il file ha solo il suo anno
   const da = Q.reduce((a, m) => m.data < a ? m.data : a, Q[0].data), a = Q.reduce((x, m) => m.data > x ? m.data : x, Q[0].data);
   const contante = r => /CONTANT/.test(String(r.metodo||'').toUpperCase() + String(r.mezzo||'').toUpperCase());
-  const A = rows.filter(r => r.data && !contante(r) && r.data >= spostaData(da, -5) && r.data <= spostaData(a, 5));
-  const usB = new Set(), usA = new Set(), allineati = [], diversi = [];
+  const A = rows.filter(r => r.data && !contante(r) && r.data >= spostaData(da, -20) && r.data <= spostaData(a, 20));
+  const usB = new Set(), usA = new Set(), allineati = [], diversi = [], somme = [];
+  const testo = m => m.descrizione + ' ' + m.originale, cent = v => Math.round(Math.abs(v) * 100);
   const prendi = (coppie, dove) => { coppie.sort((x, y) => x[0] - y[0]); for (const [, m, r] of coppie) if (!usB.has(m.i) && !usA.has(r._index)) { usB.add(m.i); usA.add(r._index); dove.push({m, r}); } };
+  const uguali = (m, r) => Math.abs(r.valore - m.importo) < 0.005;
   const c1 = [];
-  for (const m of B) for (const r of A) { const g = giorniTra(m.data, r.data); if (Math.abs(r.valore - m.importo) < 0.005 && g <= 5) c1.push([g, m, r]); }
+  for (const m of B) for (const r of A) { const g = giorniTra(m.data, r.data); if (uguali(m, r) && g <= 5) c1.push([g, m, r]); }
   prendi(c1, allineati);
   const c2 = [];
-  for (const m of B) if (!usB.has(m.i)) for (const r of A) if (!usA.has(r._index) && Math.sign(r.valore) === Math.sign(m.importo)) {
-    const g = giorniTra(m.data, r.data), rel = Math.abs(r.valore - m.importo) / Math.max(Math.abs(m.importo), 1), s = somiglianza(m.descrizione + ' ' + m.originale, r.descrizione);
-    if (g <= 2 && rel <= 0.2 && (s > 0 || g === 0)) c2.push([g + rel*10 - s, m, r]);
+  for (const m of B) if (!usB.has(m.i)) for (const r of A) if (!usA.has(r._index) && uguali(m, r)) { const g = giorniTra(m.data, r.data), s = somiglianza(testo(m), r.descrizione); if (g <= 20 && s > 0) c2.push([g - s*5, m, r]); }
+  prendi(c2, allineati);
+  for (const m of B) {
+    if (usB.has(m.i)) continue;
+    const vicine = A.filter(r => !usA.has(r._index) && Math.sign(r.valore) === Math.sign(m.importo) && giorniTra(m.data, r.data) <= 5);
+    const perGiorno = {}; vicine.forEach(r => (perGiorno[r.data] = perGiorno[r.data] || []).push(r));
+    for (const L of Object.values(perGiorno)) { const g = sottoinsieme(L, r => cent(r.valore), cent(m.importo), 4); if (g) { usB.add(m.i); g.forEach(r => usA.add(r._index)); somme.push({m:[m], r:g}); break; } }
   }
-  prendi(c2, diversi);
-  const mancanti = B.filter(m => !usB.has(m.i)).map(m => {
-    const simile = rows.map(r => [somiglianza(m.descrizione + ' ' + m.originale, r.descrizione), r]).filter(x => x[0] >= 2).sort((x, y) => y[0] - x[0])[0];
-    const altroAnno = +m.data.slice(0,4) !== anno;
-    return {...m, cat:m.categoria, cadenza: simile ? simile[1].cadenza || 'SECCA' : 'SECCA', altroAnno, sel: !altroAnno && m.tipo === 'normale'};
+  for (const r of A) {
+    if (usA.has(r._index)) continue;
+    const vicini = B.filter(m => !usB.has(m.i) && Math.sign(r.valore) === Math.sign(m.importo) && m.data >= spostaData(r.data, -10) && m.data <= spostaData(r.data, 3));
+    if (!vicini.some(m => somiglianza(testo(m), r.descrizione) > 0)) continue;
+    const g = sottoinsieme(vicini, m => cent(m.importo), cent(r.valore), 12);
+    if (g) { g.forEach(m => usB.add(m.i)); usA.add(r._index); somme.push({m:g, r:[r]}); }
+  }
+  const c3 = [];
+  for (const m of B) if (!usB.has(m.i)) for (const r of A) if (!usA.has(r._index) && Math.sign(r.valore) === Math.sign(m.importo)) {
+    const g = giorniTra(m.data, r.data), rel = Math.abs(r.valore - m.importo) / Math.max(Math.abs(m.importo), 1), s = somiglianza(testo(m), r.descrizione);
+    if (g <= 2 && rel <= 0.2 && (s > 0 || g === 0)) c3.push([g + rel*10 - s, m, r]);
+  }
+  prendi(c3, diversi);
+  const resto = B.filter(m => !usB.has(m.i));
+  const vecchi = resto.filter(m => +m.data.slice(0,4) !== anno).length;
+  const mancanti = resto.filter(m => +m.data.slice(0,4) === anno).map(m => {
+    const simile = rows.map(r => [somiglianza(testo(m), r.descrizione), r]).filter(x => x[0] >= 2).sort((x, y) => y[0] - x[0])[0];
+    // addebito e sconto dello stesso giorno che si annullano (canone e sconto canone): di solito non si segnano
+    const annulla = resto.some(x => x !== m && x.data === m.data && Math.abs(x.importo + m.importo) < 0.005);
+    return {...m, cat:m.categoria, cadenza: simile ? simile[1].cadenza || 'SECCA' : 'SECCA', annulla, sel: !annulla && m.tipo === 'normale' && !!m.categoria};
   });
-  // da segnalare solo le voci di questo conto: sul conto corrente non quelle segnate con la carta di credito, e viceversa
-  const diQuesto = r => (String(r.mezzo||'').toUpperCase() === 'CARTA DI CREDITO') === (tipo === 'carta');
+  // sul conto si controllano tutte le voci non in contanti; sull'estratto della carta di credito solo quelle segnate con la carta di credito
+  const diQuesto = r => tipo !== 'carta' || String(r.mezzo||'').toUpperCase() === 'CARTA DI CREDITO';
   const inApp = A.filter(r => !usA.has(r._index) && r.data >= da && r.data <= a && diQuesto(r));
   const doppio = r => inApp.some(x => x !== r && x.data === r.data && Math.abs(x.valore - r.valore) < 0.005);
-  return {da, a, allineati, diversi, mancanti, inApp: inApp.map(r => ({r, doppio: doppio(r)}))};
+  // una voce del file che riassume molti pagamenti (un viaggio): i movimenti dei giorni prima restano non spuntati
+  for (const r of inApp) {
+    if (Math.abs(r.valore) < 20) continue;
+    const dentro = mancanti.filter(m => !m.dentro && Math.sign(m.importo) === Math.sign(r.valore) && m.data >= spostaData(r.data, -14) && m.data <= spostaData(r.data, 3));
+    const tot = dentro.reduce((s, m) => s + Math.abs(m.importo), 0);
+    if (dentro.length >= 3 && tot >= Math.abs(r.valore) * 0.5 && tot <= Math.abs(r.valore) * 2) dentro.forEach(m => { m.dentro = r; m.sel = false; });
+  }
+  return {da, a, allineati, somme, diversi, mancanti, vecchi, inApp: inApp.map(r => ({r, doppio: doppio(r)}))};
 }
 const NOTA_TIPO = { saldo_carta:'Saldo della carta di credito: le singole spese sono già nell\'estratto della carta', giroconto:'Giroconto tra i tuoi conti', commissione:'Spese della banca' };
 function risultatoEstratto(){
@@ -1669,28 +1768,36 @@ function risultatoEstratto(){
   const mancanti = R.mancanti.map((m, i) => `<div class="row">
     <button class="check ${m.sel?'on':''}" onclick="selMancante(${i})" aria-label="${m.sel?'Non aggiungere':'Aggiungi'}" ${m.altroAnno?'disabled':''}>${m.sel?ico('Check'):''}</button>
     <span class="row-main"><span class="row-title">${esc(m.descrizione)}</span>
-    <span class="row-sub">${giorno(m.data)}, ${m.altroAnno?`del ${m.data.slice(0,4)}: va nel file di quell'anno`:`<select class="pick" aria-label="Categoria" onchange="ES.r.mancanti[${i}].cat=this.value">${cats.map(c=>`<option value="${esc(c)}" ${c===m.cat?'selected':''}>${esc(nome(c))}</option>`).join('')}</select>`}</span>
-    ${m.tipo!=='normale'?`<span class="row-sub">${NOTA_TIPO[m.tipo]||''}</span>`:''}</span>
+    <span class="row-sub">${giorno(m.data)}, ${m.altroAnno?`del ${m.data.slice(0,4)}: va nel file di quell'anno`:`<select class="pick" aria-label="Categoria" onchange="ES.r.mancanti[${i}].cat=this.value">${m.cat?'':'<option value="" selected>Scegli la categoria</option>'}${cats.map(c=>`<option value="${esc(c)}" ${c===m.cat?'selected':''}>${esc(nome(c))}</option>`).join('')}</select>`}</span>
+    ${m.dentro?`<span class="row-sub">Forse è già dentro «${esc(frase(m.dentro.descrizione))}» del ${giornoBreve(m.dentro.data)}</span>`:m.annulla?'<span class="row-sub">Si annulla con un altro movimento dello stesso giorno</span>':m.tipo!=='normale'?`<span class="row-sub">${NOTA_TIPO[m.tipo]||''}</span>`:''}</span>
     <span class="amt ${m.importo>0?'pos':''}">${fmt(Math.abs(m.importo))}</span></div>`).join('');
   const diversi = R.diversi.map(({m, r}, i) => `<div class="row"><span class="row-main"><span class="row-title">${esc(frase(r.descrizione) || m.descrizione)}</span>
     <span class="row-sub">${giorno(r.data)}: nell'app ${fmt(Math.abs(r.valore))}, nel conto ${fmt(Math.abs(m.importo))}</span></span>
     ${m.corretto?`<span class="pos" style="font-size:15px">corretto</span>`:`<button class="chip" onclick="correggiImporto(${i})">Correggi</button>`}</div>`).join('');
   const inApp = R.inApp.map(({r, doppio}) => `<button class="row" onclick="openTx(${r._index})"><span class="ic">${icoCat(r.tipologia)}</span><span class="row-main"><span class="row-title">${esc(frase(r.descrizione) || nome(r.tipologia))}</span><span class="row-sub">${giorno(r.data)}${doppio?', <span class="warn">forse un doppione</span>':r.data > spostaData(R.a, -3)?', forse non ancora contabilizzata':''}</span></span><span class="amt ${r.valore>0?'pos':''}">${fmt(Math.abs(r.valore))}</span></button>`).join('');
+  const somme = R.somme.map(({m, r}) => { const uno = m.length === 1 ? m[0] : null; return `<div class="row"><span class="row-main"><span class="row-title">${esc(uno ? (frase(r[0].descrizione) && r.length===1 ? frase(r[0].descrizione) : uno.descrizione) : frase(r[0].descrizione))}</span>
+    <span class="row-sub">${uno ? `Nel conto un movimento del ${giorno(uno.data)}, nel file ${r.length} voci: ${r.map(x => esc(frase(x.descrizione) || nome(x.tipologia)) + ' ' + fmt(Math.abs(x.valore))).join(', ')}` : `Nel file una voce del ${giorno(r[0].data)}, nel conto ${m.length} movimenti dal ${giornoBreve(m[0].data < m[m.length-1].data ? m[0].data : m[m.length-1].data)}: ${m.map(x => fmt(Math.abs(x.importo))).join(' + ')}`}</span></span>
+    <span class="amt ${(uno ? uno.importo : r[0].valore) > 0 ? 'pos' : ''}">${fmt(Math.abs(uno ? uno.importo : r[0].valore))}</span></div>`; }).join('');
   const allineati = R.allineati.map(({m, r}) => `<div class="row"><span class="row-main"><span class="row-title">${esc(frase(r.descrizione) || m.descrizione)}</span><span class="row-sub">${giorno(m.data)}${m.data!==r.data?`, nell'app il ${giornoBreve(r.data)}`:''}</span></span><span class="amt ${m.importo>0?'pos':''}">${fmt(Math.abs(m.importo))}</span></div>`).join('');
   return `<p class="muted" style="margin-bottom:16px">${esc(ES.conto || ES.nome)}, dal ${giorno(R.da)} al ${giorno(R.a)}.</p>
-  <div class="stat3"><div><small>Allineati</small><b>${R.allineati.length}</b></div><div><small>Da aggiungere</small><b>${R.mancanti.length}</b></div><div><small>Da controllare</small><b>${R.diversi.length + R.inApp.length}</b></div></div>
+  ${ES.avviso?`<p class="avviso">${ico('TriangleAlert')}<span>${esc(ES.avviso)}</span></p>`:''}
+  <div class="stat3"><div><small>Allineati</small><b>${R.allineati.length + R.somme.length}</b></div><div><small>Da aggiungere</small><b>${R.mancanti.length}</b></div><div><small>Da controllare</small><b>${R.diversi.length + R.inApp.length}</b></div></div>
   ${!R.mancanti.length && !R.diversi.length && !R.inApp.length ? `<div class="card" style="margin-top:16px"><p><b>Tutto allineato.</b> Ogni movimento dell'estratto è già nel file Excel con lo stesso importo.</p></div>` : ''}
-  ${sezione('m', 'Nel conto, non nel file', R.mancanti.length, `<div class="list">${mancanti}</div>${sel?`<button class="btn" style="margin-top:16px" id="btnAggiungi" onclick="aggiungiMancanti()">Aggiungi ${sel===1?'1 movimento':sel+' movimenti'} al file</button>`:''}`, 'Spunta quelli da aggiungere e controlla la categoria proposta. Saldi della carta e giroconti sono esclusi di partenza: di solito non sono spese.')}
+  ${sezione('m', 'Nel conto, non nel file', R.mancanti.length, `${R.mancanti.length > 3 ? `<div class="chips"><button class="chip" onclick="selTutti(true)">Spunta tutti</button><button class="chip" onclick="selTutti(false)">Togli tutti</button></div>` : ''}<div class="list">${mancanti}</div>${sel?`<button class="btn" style="margin-top:16px" id="btnAggiungi" onclick="aggiungiMancanti()">Aggiungi ${sel===1?'1 movimento':sel+' movimenti'} al file</button>`:''}`, 'Spunta quelli da aggiungere e controlla la categoria proposta. Partono non spuntati saldi della carta, giroconti, spese della banca e i pagamenti che sembrano già riassunti in una voce del file.')}
+  ${sezione('s', 'Allineati come somma', R.somme.length, `<div class="list">${somme}</div>`, 'Stesso totale, diviso in modo diverso: per esempio una bolletta segnata come luce e gas, o i pagamenti di una gita riuniti in una voce. Controlla che siano giusti.')}
   ${sezione('d', 'Importo diverso', R.diversi.length, `<div class="list">${diversi}</div>`, 'Stessa spesa con importo diverso: Correggi scrive nel file l\'importo del conto.')}
   ${sezione('a', 'Nel file, non nel conto', R.inApp.length, `<div class="list">${inApp}</div>`, ES.tipo === 'carta' ? 'Voci segnate con la carta di credito che nell\'estratto non ci sono: data o importo sbagliati, doppioni, o pagate in altro modo.' : 'Possono avere la data o l\'importo sbagliati, essere doppioni o pagate da un altro conto. Non controllo le spese in contanti né quelle segnate con la carta di credito: per quelle carica l\'estratto della carta.')}
   ${R.allineati.length?`<h2 class="gh">Allineati<button class="link" onclick="ES.aperti.ok=!ES.aperti.ok;render()">${ES.aperti.ok?'Nascondi':'Mostra'}</button></h2>${ES.aperti.ok?`<div class="list">${allineati}</div>`:''}`:''}
+  ${R.vecchi?`<p class="note" style="margin-top:16px">${R.vecchi === 1 ? '1 movimento è' : R.vecchi + ' movimenti sono'} di un altro anno e non ${R.vecchi === 1 ? 'è controllato' : 'sono controllati'}: vanno nel file di quell'anno.</p>`:''}
   <button class="btn soft" style="margin-top:32px" onclick="ES={fase:'scelta',tipo:ES.tipo};render()">Leggi un altro estratto</button>
   ${ES.costo?`<p class="note">Lettura: ${usd(ES.costo)}.</p>`:''}`;
 }
+function selTutti(v){ ES.r.mancanti.forEach(m => { m.sel = v && !!m.cat; }); render(); }
 function selMancante(i){ const m = ES.r.mancanti[i]; if (m.altroAnno) return; m.sel = !m.sel; render(); }
 async function aggiungiMancanti(){
   const L = ES.r.mancanti.filter(m => m.sel && !m.altroAnno), b = $('#btnAggiungi');
   if (!L.length) return;
+  if (L.some(m => !m.cat)) { toast('Scegli la categoria di ogni movimento spuntato'); return; }
   if (b) { b.disabled = true; b.textContent = 'Aggiungo…'; }
   const righe = L.map(m => [m.importo < 0 ? 'USCITA' : 'ENTRATA', m.cat, m.importo, m.cadenza, String(m.descrizione).toUpperCase(), m.mezzo==='CONTANTI' ? 'CONTANTI' : 'ELETTRONICO', m.mezzo, m.data, MESI_IT[+m.data.slice(5,7) - 1]]);
   try {
@@ -1730,20 +1837,43 @@ async function comprimi(file){
   let img;
   try { img = await createImageBitmap(file, {imageOrientation:'from-image'}); }
   catch(e) { img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('formato non supportato: salva la foto in JPEG')); i.src = URL.createObjectURL(file); }); }
-  const w = img.width, h = img.height, k = Math.min(1, 2000 / Math.max(w, h));
-  const c = document.createElement('canvas'); c.width = Math.round(w*k); c.height = Math.round(h*k);
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-  const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.82));
-  if (!blob) throw new Error('non riesco a preparare la foto');
-  return blob;
+  const w = img.width, h = img.height;
+  const taglia = async (y, alto, k, q) => {
+    const c = document.createElement('canvas'); c.width = Math.round(w*k); c.height = Math.round(alto*k);
+    c.getContext('2d').drawImage(img, 0, y, w, alto, 0, 0, c.width, c.height);
+    const b = await new Promise(ok => c.toBlob(ok, 'image/jpeg', q));
+    if (!b) throw new Error('non riesco a preparare la foto');
+    return b;
+  };
+  // da archiviare: intera, larga al massimo 1400 px e alta al massimo 8000
+  const archivio = await taglia(0, h, Math.min(1, 1400 / Math.min(w, h), 8000 / Math.max(w, h)), 0.75);
+  // da leggere: uno scontrino lungo va a pezzi alti circa 2,5 volte la larghezza, così i numeri restano grandi;
+  // ogni taglio cade nella riga più bianca vicina (fra due righe di testo), senza sovrapposizioni che contino due volte un articolo
+  if (h / w <= 3) return {archivio, pezzi:[await taglia(0, h, Math.min(1, 2000 / Math.max(w, h)), 0.82)]};
+  const sw = 200, sh = Math.round(h * sw / w), c = document.createElement('canvas'); c.width = sw; c.height = sh;
+  const g = c.getContext('2d', {willReadFrequently:true}); g.drawImage(img, 0, 0, sw, sh);
+  const px = g.getImageData(0, 0, sw, sh).data, inchiostro = new Array(sh).fill(0);
+  for (let y = 0; y < sh; y++) for (let x = Math.round(sw*0.05); x < sw*0.95; x++) { const i = (y*sw + x)*4; if (px[i] + px[i+1] + px[i+2] < 330) inchiostro[y]++; }
+  const alto = w * 2.5, tagli = [0];
+  while (h - tagli[tagli.length - 1] > alto * 1.2 && tagli.length < 8) {
+    const t = (tagli[tagli.length - 1] + alto) * sh / h, da = Math.round(t - alto * 0.2 * sh / h), a = Math.round(t + alto * 0.1 * sh / h);
+    let meglio = Math.round(t);
+    for (let y = da; y <= Math.min(a, sh - 1); y++) if (inchiostro[y] < inchiostro[meglio]) meglio = y;
+    tagli.push(Math.round(meglio * h / sh));
+  }
+  tagli.push(h);
+  const pezzi = [], k = Math.min(1, 1100 / w);
+  for (let i = 0; i < tagli.length - 1; i++) pezzi.push(await taglia(tagli[i], tagli[i+1] - tagli[i], k, 0.82));
+  return {archivio, pezzi};
 }
 async function leggiScontrino(x){
   try {
     const [rows, art] = await Promise.all([getTransazioni(), getArticoli().catch(() => []), getScontrini().catch(() => [])]);
-    x.blob = await comprimi(x.file);
+    const foto = await comprimi(x.file);
+    x.blob = foto.archivio;
     const prodotti = [], visti = new Set(), sotto = new Set();
     for (const a of [...art].reverse()) { const k = `${a.prodotto} | ${a.marca} | ${a.sotto}`; if (a.prodotto && !visti.has(k)) { visti.add(k); prodotti.push(k); } if (a.sotto) sotto.add(a.sotto); }
-    x.d = await leggiConClaude('/scontrino', { media_type:'image/jpeg', immagine: await aBase64(x.blob), categorie: tutteCat(rows), prodotti: prodotti.slice(0, 400), sottocategorie: [...sotto] });
+    x.d = await leggiConClaude('/scontrino', { media_type:'image/jpeg', immagini: await Promise.all(foto.pezzi.map(aBase64)), categorie: tutteCat(rows), prodotti: prodotti.slice(0, 400), sottocategorie: [...sotto] });
     x.d.articoli = x.d.articoli || [];
     x.stato = 'pronto'; x.errore = '';
     valutaScontrino(x);
@@ -1754,7 +1884,9 @@ function candidatiSpesa(x){
   const usate = new Set([...(scontriniCache||[]).map(s => s.spesa), ...SC.filter(y => y !== x && y.scelta === 'collega' && y.spesa != null && y.stato !== 'scartato').map(y => chiaveSpesa(trovaRiga(y.spesa)))]);
   // stesso importo entro 3 giorni, o entro 15 se la descrizione nomina il negozio (spesa segnata qualche giorno dopo)
   const vicina = r => { const g = giorniTra(r.data, d.data); return g <= 3 || (g <= 15 && somiglianza(r.descrizione, d.negozio) > 0); };
-  return (cachedRows||[]).filter(r => r.valore < 0 && r.data && Math.abs(-r.valore - d.totale) < 0.01 && vicina(r) && !usate.has(chiaveSpesa(r)))
+  // nel file può esserci il totale o solo la parte pagata (senza buoni pasto)
+  const importo = r => Math.abs(-r.valore - d.totale) < 0.01 || (d.pagato > 0 && Math.abs(-r.valore - d.pagato) < 0.01);
+  return (cachedRows||[]).filter(r => r.valore < 0 && r.data && importo(r) && vicina(r) && !usate.has(chiaveSpesa(r)))
     .sort((a, b) => giorniTra(a.data, d.data) - giorniTra(b.data, d.data)).slice(0, 4);
 }
 function valutaScontrino(x){
@@ -1781,7 +1913,7 @@ function rigaDaScontrino(x){
   const ult = [...(cachedRows||[])].reverse().find(r => r.tipologia === cat && r.valore < 0);
   const met = contanti ? 'CONTANTI' : (ult && ult.metodo && ult.metodo !== 'CONTANTI' ? ult.metodo : 'ELETTRONICO');
   const mez = contanti ? 'CONTANTI' : (ult && ult.mezzo && ult.mezzo !== 'CONTANTI' ? ult.mezzo : 'CARTA DI DEBITO');
-  return ['USCITA', cat, -Math.abs(d.totale), (ult && ult.cadenza) || 'SECCA', ((cat === 'CIBO' ? 'SPESA ' : '') + String(d.negozio||'')).toUpperCase(), met, mez, d.data, MESI_IT[+d.data.slice(5,7) - 1]];
+  return ['USCITA', cat, -Math.abs(d.pagato > 0 ? d.pagato : d.totale), (ult && ult.cadenza) || 'SECCA', ((cat === 'CIBO' ? 'SPESA ' : '') + String(d.negozio||'')).toUpperCase(), met, mez, d.data, MESI_IT[+d.data.slice(5,7) - 1]];
 }
 async function salvaScontrino(x){
   if (x.scelta === 'chiedi') { toast('Scegli se aggiungerlo come spesa o solo allo storico dei prezzi'); return false; }
@@ -1800,7 +1932,7 @@ async function salvaScontrino(x){
       spesa = x.spesaFatta;
     }
     if (!x.rigaFatta) {
-      await apiPost(`${wb()}/tables/${TAB_SCONTRINI.nome}/rows`, {values:[[x.id, d.data, d.ora, d.negozio, d.totale, d.pagamento, d.articoli.length, x.foto, spesa, new Date().toISOString().slice(0,16).replace('T',' ')]]});
+      await apiPost(`${wb()}/tables/${TAB_SCONTRINI.nome}/rows`, {values:[[x.id, d.data, d.ora, d.negozio, d.totale, d.pagato || d.totale, d.pagamento, d.articoli.length, x.foto, spesa, new Date().toISOString().slice(0,16).replace('T',' ')]]});
       x.rigaFatta = true;
     }
     if (d.articoli.length) await apiPost(`${wb()}/tables/${TAB_ARTICOLI.nome}/rows`, {values: d.articoli.map(a => { const [pu, puU] = prezzoUnitario(a); return [x.id, d.data, d.negozio, a.prodotto, a.marca, a.categoria, a.sottocategoria, +a.quantita || 1, a.unita, +a.contenuto || 0, a.contenuto_unita || '', +a.prezzo || 0, +a.sconto || 0, Math.round(pu*10000)/10000, puU, a.testo]; })});
@@ -1852,7 +1984,7 @@ async function vScontrini(){
   const spesa = spesaLetturaMese();
   return `<h1 class="lt">Scontrini</h1>
   <label class="drop" id="drop">${ico('ReceiptText')}<b>Carica le foto degli scontrini</b><span>Anche tante insieme: le leggo due alla volta</span><input type="file" accept="image/*" multiple onchange="aggiungiFoto(this.files);this.value=''"></label>
-  <p class="note">Claude legge negozio, data, articoli e prezzi (circa 1,5 centesimi a scontrino), li abbina alla spesa già nel file e tiene lo storico dei prezzi. Le foto vanno nella cartella Scontrini accanto al file Excel.${spesa ? ` Letture di questo mese su questo dispositivo: ${usd(spesa)}.` : ''}</p>
+  <p class="note">Claude legge negozio, data, articoli e prezzi (da 1 a 8 centesimi a scontrino, secondo quanto è lungo), li abbina alla spesa già nel file e tiene lo storico dei prezzi. Le foto vanno nella cartella Scontrini accanto al file Excel.${spesa ? ` Letture di questo mese su questo dispositivo: ${usd(spesa)}.` : ''}</p>
   <div id="coda">${codaHtml()}</div>
   <div class="list" style="margin-top:32px"><button class="row" onclick="go('prezzi','push')"><span class="ic">${ico('ChartLine')}</span><span class="row-main">Prezzi e inflazione</span>${chev()}</button></div>
   ${sc.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>Non riesco a leggere il foglio SCONTRINI: ${esc(String(sc.errore).slice(0,160))}</span></p>` : ''}
@@ -1871,7 +2003,7 @@ function apriScontrino(id){ SX = SC.find(x => x.id === id); if (!SX || !SX.d) re
 function sceltaScontrino(v, idx){ SX.scelta = v; if (idx != null) SX.spesa = idx; SX.auto = false; disegnaScontrino(); }
 function modScontrino(k, v){
   const d = SX.d;
-  if (k === 'totale') d.totale = parseFloat(String(v).replace(',', '.')) || 0; else d[k] = v;
+  if (k === 'totale' || k === 'pagato') d[k] = parseFloat(String(v).replace(',', '.')) || 0; else d[k] = v;
   const scelta = SX.scelta, spesa = SX.spesa; valutaScontrino(SX);
   if (scelta === 'nuova' || scelta === 'storico') SX.scelta = scelta; else if (scelta === 'collega' && SX.cand.some(r => r._index === spesa)) SX.spesa = spesa;
   SX.auto = false; disegnaScontrino();
@@ -1913,12 +2045,13 @@ function disegnaScontrino(){
       ${campo('Negozio', `<input class="field" value="${esc(d.negozio)}" onchange="modScontrino('negozio',this.value)">`)}
       ${campo('Data', `<input class="field" type="date" value="${isoValida(d.data) ? d.data : ''}" onchange="modScontrino('data',this.value)">`)}
       ${campo('Totale', `<input class="field" inputmode="decimal" value="${String(d.totale).replace('.', ',')}" onchange="modScontrino('totale',this.value)">`)}
+      ${d.pagato > 0 && Math.abs(d.pagato - d.totale) > 0.005 ? campo('Pagato da te', `<input class="field" inputmode="decimal" value="${String(d.pagato).replace('.', ',')}" onchange="modScontrino('pagato',this.value)">`) : ''}
       ${campo('Pagamento', `<select class="field" onchange="SX.d.pagamento=this.value">${['carta','contanti','altro','sconosciuto'].map(p => `<option ${p === d.pagamento ? 'selected' : ''}>${p}</option>`).join('')}</select>`)}
     </div>
     <p class="sublabel">Spesa nel file</p>
     <div class="list">
       ${(x.cand||[]).map(r => opz('collega', `Collega a ${esc(frase(r.descrizione) || nome(r.tipologia))}`, `${giornoBreve(r.data)}, ${esc(nome(r.tipologia))}, ${fmt(-r.valore)}`, r._index)).join('')}
-      ${altroAnno ? '' : opz('nuova', 'Aggiungi come nuova spesa', `${fmt(d.totale)} in ${esc(nome(x.cat).toLowerCase())}, con la data dello scontrino`)}
+      ${altroAnno ? '' : opz('nuova', 'Aggiungi come nuova spesa', `${fmt(d.pagato > 0 ? d.pagato : d.totale)} in ${esc(nome(x.cat).toLowerCase())}, con la data dello scontrino`)}
       ${opz('storico', 'Solo storico prezzi', altroAnno ? `È del ${d.data.slice(0,4)}: lo uso solo per i prezzi` : 'Non tocca le spese del file')}
       ${opz('scarta', 'Scarta', 'Non salvare questo scontrino')}
     </div>
