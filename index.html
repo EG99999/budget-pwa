@@ -235,7 +235,7 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .composer .send:disabled{background:var(--fill-2);color:var(--text-3)}
 .composer .send svg.i{width:24px;height:24px}
 body:has(> .composer) .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
-@media (min-width:960px){.composer{left:264px;bottom:0;padding:var(--s2) var(--s6)} body:has(> .composer) .toast{bottom:96px}}
+@media (min-width:960px) and (min-height:521px){.composer{left:264px;bottom:0;padding:var(--s2) var(--s6)} body:has(> .composer) .toast{bottom:96px}}
 
 .toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:60;background:rgba(44,44,46,.96);color:#fff;font-size:15px;padding:var(--s1) var(--s2);border-radius:24px;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -253,9 +253,73 @@ body:has(> .composer) .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 #updatePopup{display:none}
 #updatePopup.show{display:flex;z-index:80}
 
-/* barra laterale (computer) */
+/* ── LAYOUT PER DISPOSITIVO ────────────────────────────────────
+   telefono verticale: la base qui sopra
+   telefono orizzontale: orizzontale con altezza fino a 520 px (barre sottili, foglio a due colonne)
+   tablet verticale: da 600 px senza barra laterale (fogli centrati, due colonne da 720 px)
+   tablet orizzontale e computer: da 960 px e altezza oltre 520 px (barra laterale, due colonne da 1200 px) */
+.nav{padding-left:max(var(--s1),env(safe-area-inset-left));padding-right:max(var(--s1),env(safe-area-inset-right))}
+.content{padding-left:max(var(--s2),env(safe-area-inset-left));padding-right:max(var(--s2),env(safe-area-inset-right))}
+.tabbar{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.composer{padding-left:max(var(--s2),env(safe-area-inset-left));padding-right:max(var(--s2),env(safe-area-inset-right))}
+.blocco>h2.gh{margin-top:var(--s4)}
+.chart{max-height:320px}
+@media (hover:hover){
+  button.row:hover,button.hbar:hover,.side-item:not(.on):hover{background:var(--fill)}
+  .chip:not(.on):hover{background:var(--fill-2)}
+  .tab:not(.on):hover{color:var(--text)}
+}
+@media (min-width:600px){
+  .content{padding-left:max(var(--s4),env(safe-area-inset-left));padding-right:max(var(--s4),env(safe-area-inset-right))}
+  .tabbar{grid-template-columns:repeat(5,minmax(0,120px));justify-content:center}
+}
+@media (min-width:600px) and (min-height:600px){
+  .sheet{left:50%;top:50%;bottom:auto;right:auto;width:448px;max-height:88vh;border-radius:16px;transform:translate(-50%,-46%) scale(.98);opacity:0;transition:transform .25s ease,opacity .2s}
+  .sheet-wrap.open .sheet{transform:translate(-50%,-50%);opacity:1}
+  .grab{display:none}
+}
+@media (min-width:720px) and (max-width:959px) and (min-height:521px), (min-width:1200px) and (min-height:521px){
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 var(--s4);align-items:start}
+  .cols>div>h2.gh:first-child{margin-top:0}
+  .gruppi{columns:2;column-gap:var(--s4)}
+  .blocco{break-inside:avoid;padding-top:var(--s4)}
+  .blocco>h2.gh{margin-top:0}
+}
+@media (orientation:landscape) and (max-height:520px){
+  .nav{height:calc(40px + env(safe-area-inset-top))}
+  .nav-back{height:40px}
+  .icon-btn{width:40px;height:40px}
+  .content{padding-top:48px;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .date-line{font-size:13px}
+  h1.lt{font-size:24px;margin-bottom:var(--s1)}
+  h2.gh{margin-top:var(--s3)}
+  .hero .lead{font-size:17px}
+  .tabbar{height:calc(48px + env(safe-area-inset-bottom))}
+  .tab{flex-direction:row;gap:var(--s1);font-size:13px}
+  .tab svg.i{width:20px;height:20px}
+  .tab-add span{width:40px;height:40px}
+  .composer{bottom:calc(48px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(64px + env(safe-area-inset-bottom))}
+  body:has(> .composer) .toast{bottom:calc(112px + env(safe-area-inset-bottom))}
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 var(--s3);align-items:start}
+  .cols>div>h2.gh:first-child{margin-top:0}
+  .gruppi{columns:2;column-gap:var(--s3)}
+  .blocco{break-inside:avoid;padding-top:var(--s3)}
+  .blocco>h2.gh{margin-top:0}
+  /* foglio a tutto schermo: campi a sinistra, tastierino a destra */
+  .sheet{top:0;max-height:none;border-radius:0;display:grid;grid-template-columns:1fr 304px;grid-template-rows:auto 1fr;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .grab{display:none}
+  .sheet-head{grid-column:1/-1}
+  .sheet-scroll{grid-column:1;grid-row:2}
+  .sheet-scroll:last-child{grid-column:1/-1}
+  .sheet-foot{grid-column:2;grid-row:2;border-top:0;border-left:1px solid var(--sep);display:flex;flex-direction:column;justify-content:flex-end}
+  .keys button{height:40px}
+  .amount{font-size:32px;margin:0}
+}
+
+/* barra laterale (tablet orizzontale e computer) */
 .side{display:none}
-@media (min-width:960px){
+@media (min-width:960px) and (min-height:521px){
   .side{display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;width:264px;padding:var(--s3) var(--s2);background:var(--card);border-right:1px solid var(--sep);overflow-y:auto}
   .side-head{display:flex;align-items:center;gap:var(--s1);font-size:20px;font-weight:600;padding:0 var(--s1) var(--s2)}
   .side-head .app-ic{width:32px;height:32px;border-radius:8px;margin:0}
@@ -271,13 +335,10 @@ body:has(> .composer) .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
   .nav-back{display:none}
   .main{margin-left:264px}
   .content{padding:72px var(--s6) var(--s6)}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s4);align-items:start}
-  .cols>div>h2.gh:first-child{margin-top:0}
-  .sheet{left:50%;top:50%;bottom:auto;right:auto;width:448px;max-height:88vh;border-radius:16px;transform:translate(-50%,-46%) scale(.98);opacity:0;transition:transform .25s ease,opacity .2s}
-  .sheet-wrap.open .sheet{transform:translate(-50%,-50%);opacity:1}
-  .grab{display:none}
+  .content.stretto{max-width:816px}
   .toast{bottom:var(--s4);margin-left:132px}
 }
+@media (min-width:1440px) and (min-height:521px){ .content{max-width:1120px} }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -567,16 +628,16 @@ function applyTheme(){
 }
 const VIEWS = {
   oggi:{t:'Oggi',r:vOggi},
-  movimenti:{t:'Movimenti',r:vMov,after:drawMov,act:()=>`<button class="icon-btn" aria-label="Esporta CSV" onclick="exportCSV()">${ico('Download')}</button>`},
+  movimenti:{t:'Movimenti',r:vMov,after:drawMov,w:'stretto',act:()=>`<button class="icon-btn" aria-label="Esporta CSV" onclick="exportCSV()">${ico('Download')}</button>`},
   budget:{t:'Budget',r:vBudget},
   analisi:{t:'Analisi',r:vAnalisi},
   andamento:{t:'Andamento',r:vAndamento,parent:'analisi'},
   salute:{t:'Salute finanziaria',r:vSalute,parent:'analisi'},
   casa:{t:'Casa',r:vCasa,parent:'analisi'},
   abbonamenti:{t:'Abbonamenti',r:vAbbonamenti,parent:'analisi'},
-  coab:{t:'Coabitazione',r:vCoab,parent:'analisi'},
-  consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
-  impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi'}
+  coab:{t:'Coabitazione',r:vCoab,parent:'analisi',w:'stretto'},
+  consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,w:'stretto',act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
+  impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi',w:'stretto'}
 };
 function go(v, anim){ S.view=v; render(anim||'fade', true); window.scrollTo(0,0); }
 let _rid = 0;
@@ -591,7 +652,7 @@ async function render(anim, nuovo){
   catch(e) { html = `<h1 class="lt">${V.t}</h1><div class="card"><p>Non riesco a leggere i dati dal file Excel.</p><p class="note" style="margin:8px 0 16px">${esc(String(e.message).slice(0,200))}</p><button class="btn soft" onclick="refreshData()">Riprova</button></div>`; }
   if (id !== _rid) return;
   c.innerHTML = html;
-  c.classList.remove('in-push','in-fade');
+  c.className = 'content' + (V.w ? ' '+V.w : '');
   if (anim) { void c.offsetWidth; c.classList.add(anim==='push'?'in-push':'in-fade'); }
   if (V.after) V.after();
   watchTitle();
@@ -769,7 +830,7 @@ async function vBudget(){
   const gruppi = [...new Set(bud.cats.map(x=>x.g))].map(g => {
     const cs = bud.cats.filter(x=>x.g===g && (bb(x)>0 || val(x)>0));
     if (!cs.length) return '';
-    return `<h2 class="gh">${esc(g)}</h2><div class="list">${cs.map(x=>budRow(x.cat,val(x),bb(x),g==='Entrate'?null:tick,g==='Entrate')).join('')}</div>`;
+    return `<section class="blocco"><h2 class="gh">${esc(g)}</h2><div class="list">${cs.map(x=>budRow(x.cat,val(x),bb(x),g==='Entrate'?null:tick,g==='Entrate')).join('')}</div></section>`;
   }).join('');
   const idx = meseV ? m+1 : 13, tv = k => bud.tot[k] ? parseFloat(bud.tot[k][idx])||0 : null;
   const prev = [['Entrate previste',tv('TOT ENTRATE')],['Uscite previste',tv('TOT USCITE')],['Saldo previsto',tv('SALDO')]].filter(x=>x[1]!=null);
@@ -781,8 +842,8 @@ async function vBudget(){
     ${totB>0?`<div class="pace"><i class="${totS>totB?'over':''}" style="width:${Math.min(totS/totB,1)*100}%"></i>${tick!=null?`<b class="tick" style="left:${tick*100}%"></b>`:''}</div>
     <div class="legend-row"><span>${pct(totS/totB)} usato</span><span>${totB-totS>=0?`restano ${eur0(totB-totS)}`:`oltre di ${eur0(totS-totB)}`}</span></div>`:''}
   </section>
-  ${gruppi}
-  ${prev.length?`<h2 class="gh">Previsto dal budget</h2><div class="list plain">${prev.map(([l,v])=>`<div class="row"><span class="row-main"><span class="row-line"><span>${l}</span><span class="num">${meno(v)}</span></span></span></div>`).join('')}</div>`:''}`;
+  <div class="gruppi">${gruppi}
+  ${prev.length?`<section class="blocco"><h2 class="gh">Previsto dal budget</h2><div class="list plain">${prev.map(([l,v])=>`<div class="row"><span class="row-main"><span class="row-line"><span>${l}</span><span class="num">${meno(v)}</span></span></span></div>`).join('')}</div></section>`:''}</div>`;
 }
 function setBud(v){ S.bud=v; render(); }
 
@@ -794,11 +855,14 @@ async function vAnalisi(){
   const vC = casa.status==='fulfilled' && casa.value.tot ? eur0(casa.value.tot.avg)+' al mese' : '';
   const vA = abb.status==='fulfilled' && abb.value.totMensile ? eur0(abb.value.totMensile)+' al mese' : '';
   return `<h1 class="lt">Analisi</h1>
-  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}</div>
-  <h2 class="gh">Spese da seguire</h2>
-  <div class="list">${r('casa','House','Casa',vC)}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div>
-  <h2 class="gh">App</h2>
-  <div class="list">${r('impostazioni','SlidersHorizontal','Impostazioni','')}</div>`;
+  <div class="gruppi">
+  <section class="blocco"><h2 class="gh">Capire le spese</h2>
+  <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('salute','Activity','Salute finanziaria',vS)}</div></section>
+  <section class="blocco"><h2 class="gh">Spese da seguire</h2>
+  <div class="list">${r('casa','House','Casa',vC)}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
+  <section class="blocco"><h2 class="gh">App</h2>
+  <div class="list">${r('impostazioni','SlidersHorizontal','Impostazioni','')}</div></section>
+  </div>`;
 }
 
 // grafico a linee: uscite ed entrate per mese
@@ -825,15 +889,15 @@ async function vAndamento(){
     if (U[S.chartSel]==null) S.chartSel = t.getMonth();
     const i = S.chartSel, mt = rows.filter(r=>sameYM(r.data,y,i)), saldo = (E[i]||0)-(U[i]||0);
     const top = Object.entries(perCat(mt.filter(r=>r.valore<0))).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]).slice(0,6), mx = top.length?top[0][1]:1;
-    body = `<div class="card">${lineChart(U,E,i,y)}<div class="key"><span style="--c:var(--line-1)"><i></i>Uscite</span><span style="--c:var(--line-2)"><i></i>Entrate</span></div></div>
-    <p class="note">Tocca un mese sul grafico per vederne il dettaglio.</p>
+    body = `<div class="cols"><div><div class="card">${lineChart(U,E,i,y)}<div class="key"><span style="--c:var(--line-1)"><i></i>Uscite</span><span style="--c:var(--line-2)"><i></i>Entrate</span></div></div>
+    <p class="note">Tocca un mese sul grafico per vederne il dettaglio.</p></div><div>
     <h2 class="gh">${mese(i)} ${y}</h2>
     <div class="list plain">
       <div class="row"><span class="row-main"><span class="row-line"><span>Uscite</span><span class="num">${fmt(U[i]||0)}</span></span></span></div>
       <div class="row"><span class="row-main"><span class="row-line"><span>Entrate</span><span class="num">${fmt(E[i]||0)}</span></span></span></div>
       <div class="row"><span class="row-main"><span class="row-line"><span>Saldo</span><span class="num ${saldo<0?'neg':''}">${meno(saldo)}</span></span></span></div>
     </div>
-    ${top.length?`<h2 class="gh">Categorie più alte</h2><div class="list">${top.map(([c,v])=>`<div class="hbar"><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></div>`).join('')}</div>`:''}`;
+    ${top.length?`<h2 class="gh">Categorie più alte</h2><div class="list">${top.map(([c,v])=>`<div class="hbar"><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></div>`).join('')}</div>`:''}</div></div>`;
   } else if (S.chart==='categorie') {
     const meseV = S.catPer==='mese';
     const src = rows.filter(r=>r.valore<0 && (meseV ? sameYM(r.data,y,t.getMonth()) : String(r.data||'').startsWith(y)));
@@ -910,9 +974,9 @@ async function vSalute(){
     <div class="score"><span class="num">${nf1.format(c.score)}</span><small>su 10</small>${st?`<em class="${tono(c.stato)}">${esc(frase(st))}</em>`:''}</div>
     ${deboli.length?`<p style="margin-top:8px">I punti più deboli: ${esc(deboli.join(' e '))}.</p>`:''}
   </section>`:''}
-  ${c.areas.length?`<h2 class="gh">Le voci del punteggio</h2>
-  <div class="list">${c.areas.map((a,k)=>{const D=dettagli(a), open=S.acc===k; return `<button class="row" aria-expanded="${open}" onclick="S.acc=S.acc===${k}?null:${k};render()"><span class="ic">${ico(['Wallet','TrendingUp','ChartPie','House','Briefcase'][k]||'Activity')}</span><span class="row-main"><span class="row-line"><span class="row-title">${esc(a.l)}</span><span class="num">${nf0.format(a.s)} su 10</span></span><span class="bar ${a.s<4?'over':a.s<7?'warn':''}"><i style="width:${a.s*10}%"></i></span><span class="row-sub">${esc(a.note)}</span></span>${D.length?ico(open?'ChevronLeft':'ChevronRight','chev'):''}</button>${open&&D.length?`<div class="acc-body">${D.map(r=>`<div><span>${esc(frase(pulisci(r.l)))}${r.st?` <span class="${tono(r.st)}">${esc(frase(pulisci(r.st)))}</span>`:''}</span><b>${fmtCfo(r.l,r.v,r.target,r.note)}</b></div>`).join('')}</div>`:''}`;}).join('')}</div>`:''}
-  ${nec||des||ris?`<h2 class="gh">Regola 50/30/20</h2>
+  <div class="gruppi">${c.areas.length?`<section class="blocco"><h2 class="gh">Le voci del punteggio</h2>
+  <div class="list">${c.areas.map((a,k)=>{const D=dettagli(a), open=S.acc===k; return `<button class="row" aria-expanded="${open}" onclick="S.acc=S.acc===${k}?null:${k};render()"><span class="ic">${ico(['Wallet','TrendingUp','ChartPie','House','Briefcase'][k]||'Activity')}</span><span class="row-main"><span class="row-line"><span class="row-title">${esc(a.l)}</span><span class="num">${nf0.format(a.s)} su 10</span></span><span class="bar ${a.s<4?'over':a.s<7?'warn':''}"><i style="width:${a.s*10}%"></i></span><span class="row-sub">${esc(a.note)}</span></span>${D.length?ico(open?'ChevronLeft':'ChevronRight','chev'):''}</button>${open&&D.length?`<div class="acc-body">${D.map(r=>`<div><span>${esc(frase(pulisci(r.l)))}${r.st?` <span class="${tono(r.st)}">${esc(frase(pulisci(r.st)))}</span>`:''}</span><b>${fmtCfo(r.l,r.v,r.target,r.note)}</b></div>`).join('')}</div>`:''}`;}).join('')}</div></section>`:''}
+  ${nec||des||ris?`<section class="blocco"><h2 class="gh">Regola 50/30/20</h2>
   <section class="card">
     <div class="stack"><i style="width:${pz(nec)/totP*100}%;background:var(--line-1)"></i><i style="width:${pz(des)/totP*100}%;background:var(--bar-warn)"></i><i style="width:${pz(ris)/totP*100}%;background:var(--line-2)"></i></div>
     <div class="legend">
@@ -920,10 +984,10 @@ async function vSalute(){
       <div style="--c:var(--bar-warn)"><i></i>Desideri, obiettivo 30%<b>${nf1.format((des?des.pct:0)*100)}%</b></div>
       <div style="--c:var(--line-2)"><i></i>Risparmio, obiettivo 20%<b>${nf1.format((ris?ris.pct:0)*100)}%</b></div>
     </div>
-  </section>`:''}
-  ${c.params.length?`<h2 class="gh">Parametri</h2>
+  </section></section>`:''}
+  ${c.params.length?`<section class="blocco"><h2 class="gh">Parametri</h2>
   <div class="list plain">${c.params.map(p=>`<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${esc(frase(pulisci(p.l)))}</span><span class="muted num">${fmtCfo(p.l,p.v,'',p.note)}</span></span>${p.note?`<span class="row-sub">${esc(frase(p.note))}</span>`:''}</span></div>`).join('')}</div>
-  <p class="note">I parametri si cambiano nel foglio Analisi CFO del file Excel.</p>`:''}`;
+  <p class="note">I parametri si cambiano nel foglio Analisi CFO del file Excel.</p></section>`:''}</div>`;
 }
 
 // ── CASA (foglio PANNELLO CASA) ───────────────────────────────
@@ -943,10 +1007,10 @@ async function vCasa(){
   const delMese = voci.filter(v=>v.mesi[m]!==0);
   return `<h1 class="lt">Casa</h1>
   ${tot?`<section class="card hero"><p class="lead">La casa costa in media <b class="num">${eur0(tot.avg)}</b> al mese, <b class="num">${eur0(tot.ytd)}</b> da inizio anno.</p></section>`:''}
-  <h2 class="gh">Voci da inizio anno</h2>
-  <div class="list">${voci.map(v=>`<div class="row"><span class="ic">${ico(icoCasa(v.n))}</span><span class="row-main"><span class="row-title">${esc(frase(v.n))}</span><span class="row-sub">media ${fmt(v.avg)} al mese</span></span><span class="amt">${fmt(v.ytd)}</span></div>`).join('')}</div>
-  <h2 class="gh">${mese(m)}</h2>
-  <div class="list">${delMese.length?delMese.map(v=>`<div class="row"><span class="ic">${ico(icoCasa(v.n))}</span><span class="row-main"><span class="row-title">${esc(frase(v.n))}</span></span><span class="amt">${fmt(v.mesi[m])}</span></div>`).join('')+(tot?`<div class="row"><span class="row-main"><span class="row-line"><b>Totale</b><b class="num">${fmt(tot.mesi[m])}</b></span></span></div>`:''):'<p class="empty">Nessuna spesa di casa registrata questo mese.</p>'}</div>`;
+  <div class="gruppi"><section class="blocco"><h2 class="gh">Voci da inizio anno</h2>
+  <div class="list">${voci.map(v=>`<div class="row"><span class="ic">${ico(icoCasa(v.n))}</span><span class="row-main"><span class="row-title">${esc(frase(v.n))}</span><span class="row-sub">media ${fmt(v.avg)} al mese</span></span><span class="amt">${fmt(v.ytd)}</span></div>`).join('')}</div></section>
+  <section class="blocco"><h2 class="gh">${mese(m)}</h2>
+  <div class="list">${delMese.length?delMese.map(v=>`<div class="row"><span class="ic">${ico(icoCasa(v.n))}</span><span class="row-main"><span class="row-title">${esc(frase(v.n))}</span></span><span class="amt">${fmt(v.mesi[m])}</span></div>`).join('')+(tot?`<div class="row"><span class="row-main"><span class="row-line"><b>Totale</b><b class="num">${fmt(tot.mesi[m])}</b></span></span></div>`:''):'<p class="empty">Nessuna spesa di casa registrata questo mese.</p>'}</div></section></div>`;
 }
 
 // ── ABBONAMENTI (foglio SPESE RICORRENTI) ─────────────────────
