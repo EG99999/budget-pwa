@@ -251,6 +251,7 @@ button.row:disabled{cursor:default}
 .edit .btn{height:40px;font-size:15px}
 select.pick{appearance:none;-webkit-appearance:none;border:0;background:none;color:var(--accent-text);font-size:13px;padding:0;cursor:pointer;max-width:100%}
 .hero .score{margin-bottom:var(--s1)}
+.ic.buona{background:var(--bar-ok);color:#fff}
 .side-anni{margin:0 0 var(--s2);flex-wrap:wrap}.side-anni .chip{height:28px;padding:0 var(--s1);font-size:13px}
 .hero .foot b.neg{color:var(--neg)}.hero .foot b.pos{color:var(--pos)}.hero .foot .row-line+.row-line{margin-top:var(--s1)}
 
@@ -718,11 +719,12 @@ const oggiIso = () => isoDi(new Date());
 function giornoLungo(iso) { const [y,m,d]=String(iso).split('-').map(Number); return frase(new Date(y,m-1,d).toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'})); }
 function giornoBreve(iso) { const [y,m,d]=String(iso).split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('it-IT',{day:'numeric',month:'long'}); }
 function formatDate(raw){ if(!raw)return''; try{return new Date(raw).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});}catch{return raw;} }
-// gli investimenti non sono spese né guadagni: soldi spostati che restano tuoi (Elia 31/10)
+// gli investimenti sono uscite (si sottraggono dal saldo) ma "spese buone": in verde e mai tra le spese da tagliare (Elia 1/11)
 const investimento = r => String(r.tipologia||'').trim().toUpperCase() === 'INVESTIMENTI';
-const spesa = r => r.valore < 0 && !investimento(r);
+const buona = c => String(c||'').trim().toUpperCase() === 'INVESTIMENTI';
+const spesa = r => r.valore < 0;
 const uscite  = L => L.filter(spesa).reduce((s,r)=>s-r.valore,0);
-const entrate = L => L.filter(r=>r.valore>0 && !investimento(r)).reduce((s,r)=>s+r.valore,0);
+const entrate = L => L.filter(r=>r.valore>0).reduce((s,r)=>s+r.valore,0);
 const investito = L => -L.filter(investimento).reduce((s,r)=>s+r.valore,0);
 function perCat(L){ const o={}; L.forEach(r=>{const c=r.tipologia||'ALTRO'; o[c]=(o[c]||0)+r.valore;}); return o; }
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2600); }
@@ -908,7 +910,8 @@ function shiftM(key,d,soloAnno){
 function seg(items, cur, fn){ return `<div class="seg" role="tablist">${items.map(([v,l])=>`<button role="tab" data-f="seg-${v}" aria-selected="${cur===v}" class="${cur===v?'on':''}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`; }
 function txRow(r, conData){
   const e = r.valore>0, tit = frase(r.descrizione) || nome(r.tipologia);
-  return `<button class="row" onclick="openTx(${r._index})"><span class="ic">${icoCat(r.tipologia)}</span><span class="row-main"><span class="row-title">${esc(tit)}</span><span class="row-sub">${esc(nome(r.tipologia))}${conData?', '+giornoBreve(r.data):''}</span></span><span class="amt ${e?'pos':''}">${fmt(Math.abs(r.valore))}</span></button>`;
+  const b = investimento(r) && r.valore < 0;
+  return `<button class="row" onclick="openTx(${r._index})"><span class="ic ${b?'buona':''}">${icoCat(r.tipologia)}</span><span class="row-main"><span class="row-title">${esc(tit)}</span><span class="row-sub">${esc(nome(r.tipologia))}${b?', <span class="pos">spesa buona</span>':''}${conData?', '+giornoBreve(r.data):''}</span></span><span class="amt ${e?'pos':''}">${fmt(Math.abs(r.valore))}</span></button>`;
 }
 // verde = categoria buona: entro il budget e al passo con il calendario (o entrata raggiunta); arancio = entro il budget ma troppo veloce; rosso = oltre
 function tonoBudget(p, tick, entrata){
@@ -945,6 +948,48 @@ function annoChart(punti, base, y, tono){
   for (let i=0;i<12;i++) s += `<text x="${X(i+.5)}" y="${H-4}" text-anchor="middle">${mese(i).slice(0,3).toLowerCase()}</text>`;
   return s + '</svg>';
 }
+// liquidità: quanto dovresti avere (1° gennaio + entrate - uscite) contro quanto c'è davvero sul conto, alla stessa data
+const chiaveSaldo = () => 'saldoReale_' + annoFile();
+function saldoReale(){ try { return JSON.parse(localStorage.getItem(chiaveSaldo()) || 'null'); } catch(e) { return null; } }
+function salvaSaldoReale(valore, data){ try { localStorage.setItem(chiaveSaldo(), JSON.stringify({valore, data})); } catch(e) {} }
+function schedaLiquidita(Yr, base, y){
+  if (base == null) return `<h2 class="gh">Liquidità</h2><div class="card"><p>Per sapere quanta liquidità dovresti avere serve quella del 1° gennaio.</p><p class="note" style="margin:8px 0 0">Scrivila nel foglio ANALISI CFO del file ${y}, alla riga "Liquidità iniziale anno".</p></div>`;
+  const E = entrate(Yr), U = uscite(Yr), I = investito(Yr), atteso = base + E - U, R = saldoReale();
+  let confronto = '';
+  if (R && isoValida(R.data) && R.data.startsWith(String(y))) {
+    const finoA = Yr.filter(r => r.data && r.data <= R.data), att = base + entrate(finoA) - uscite(finoA), diff = R.valore - att;
+    const spiega = Math.abs(diff) < 20 ? 'Torna: il file è allineato al conto.'
+      : diff > 0 ? `Sul conto c'è più del previsto: forse entrate non registrate, oppure spese segnate nel file ma non ancora addebitate (la carta di credito si addebita il mese dopo).`
+      : `Sul conto c'è meno del previsto: forse spese non registrate, contanti prelevati e non segnati, commissioni della banca. Il controllo dell'estratto conto le trova.`;
+    confronto = `<div class="sum2" style="margin-top:16px"><div><small>Sul conto il ${giornoBreve(R.data)}</small><b>${fmt(R.valore)}</b></div><div><small>Differenza</small><b class="${Math.abs(diff) < 20 ? 'pos' : 'warn'}">${diff >= 0 ? '+' : '−'}${fmt(Math.abs(diff))}</b></div></div>
+      <p class="note" style="margin:8px 0 0">Alla stessa data dovresti averne ${fmt(att)}. ${spiega}</p>`;
+  }
+  return `<h2 class="gh">Liquidità</h2>
+  <section class="card">
+    <p class="lead">Dovresti avere <b class="num">${fmt(atteso)}</b></p>
+    <p class="muted" style="margin-top:8px">${fmt(base)} al 1° gennaio, più ${fmt(E)} di entrate, meno ${fmt(U)} di uscite${I > 0 ? `, di cui <span class="pos">${fmt(I)} investiti</span>` : ''}.</p>
+    ${confronto}
+    <button class="btn soft" style="margin-top:16px" onclick="apriSaldoReale()">${R ? 'Aggiorna il saldo del conto' : 'Scrivi quanto hai sul conto'}</button>
+  </section>`;
+}
+function apriSaldoReale(){
+  const R = saldoReale() || {};
+  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Annulla</button><h2>Saldo del conto</h2><span></span></div>
+  <div class="sheet-scroll">
+    <p class="muted" style="margin:8px 8px 16px">Scrivi quanto hai davvero, conti e contanti compresi come per la liquidità del 1° gennaio. Lo confronto con quello che dice il file alla stessa data. Si aggiorna anche da solo quando carichi l'estratto conto in Excel.</p>
+    <div class="list plain">
+      <label class="row"><span>Saldo</span><input class="field" id="saldoV" inputmode="decimal" placeholder="0,00" value="${R.valore != null ? String(R.valore).replace('.', ',') : ''}"></label>
+      <label class="row"><span>Alla data</span><input class="field" id="saldoD" type="date" value="${R.data || oggiIso()}"></label>
+    </div>
+  </div>
+  <div class="sheet-foot"><button class="btn" onclick="confermaSaldoReale()">Salva</button></div>`);
+  setTimeout(() => { const i = $('#saldoV'); if (i) i.focus(); }, 300);
+}
+function confermaSaldoReale(){
+  const v = parseFloat(String($('#saldoV').value).replace(/\./g, '').replace(',', '.')), d = $('#saldoD').value;
+  if (isNaN(v) || !isoValida(d)) { toast('Scrivi il saldo e la data'); return; }
+  salvaSaldoReale(v, d); closeSheet(); toast('Saldo salvato'); render();
+}
 function apriMese(y, m){ S.f = {q:'', per:'mese', senso:'', cat:'', sort:'data-desc', limit:300}; S.movM = {y, m}; go('movimenti'); }
 function chiediPiano(perdita){
   go('consulente','push').then(() => chiedi(perdita
@@ -969,10 +1014,10 @@ async function vOggi(){
     : tono==='perdita' ? `Da inizio anno sei in <b class="neg">perdita di ${eur0(-saldoY)}</b>.` : `Da inizio anno sei <b>in pari</b>.`;
   const heroAnno = `<section class="card hero" aria-label="L'anno in breve">
     <p class="lead">${verdetto}</p>
-    <p class="muted" style="margin-top:8px">${base!=null ? `Avevi <b class="num">${eur0(base)}</b> il 1° gennaio, oggi tra conto e investimenti ne hai <b class="num">${eur0(b0+saldoY)}</b>.` : `Entrate ${eur0(Ey)}, uscite ${eur0(Uy)}.`}</p>
-    ${invY ? `<p class="muted" style="margin-top:8px">${invY > 0 ? `Hai investito <b class="num">${eur0(invY)}</b>: non conta come spesa, restano soldi tuoi.` : `Hai ritirato <b class="num">${eur0(-invY)}</b> dagli investimenti: non conta come guadagno.`}</p>` : ''}
+    <p class="muted" style="margin-top:8px">${base!=null ? `Avevi <b class="num">${eur0(base)}</b> il 1° gennaio, oggi ne hai <b class="num">${eur0(b0+saldoY)}</b>.` : `Entrate ${eur0(Ey)}, uscite ${eur0(Uy)}.`}</p>
+    ${invY ? `<p class="muted" style="margin-top:8px">${invY > 0 ? `Di cui <b class="num pos">${eur0(invY)}</b> investiti: una spesa buona, già sottratta dal saldo ma resta tua.` : `Hai ritirato <b class="num">${eur0(-invY)}</b> dagli investimenti: è già contato tra le entrate.`}</p>` : ''}
     <div style="margin-top:16px">${annoChart(punti, b0, y, tono)}</div>
-    <div class="key"><span style="--c:${tono==='crescita'?'var(--bar-ok)':tono==='perdita'?'var(--bar-over)':'var(--line-1)'}"><i></i>${base!=null?'Conto e investimenti':'Saldo da inizio anno'}</span><span style="--c:var(--text-3)"><i></i>1° gennaio</span></div>
+    <div class="key"><span style="--c:${tono==='crescita'?'var(--bar-ok)':tono==='perdita'?'var(--bar-over)':'var(--line-1)'}"><i></i>${base!=null?'Soldi disponibili':'Saldo da inizio anno'}</span><span style="--c:var(--text-3)"><i></i>1° gennaio</span></div>
   </section>`;
 
   // cosa si può fare: rimedi con il loro valore in euro
@@ -1004,8 +1049,8 @@ async function vOggi(){
   const budA = {}; if (bud) bud.cats.forEach(x=>budA[x.cat]=x.a);
   const top = Object.entries(catY).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]).slice(0,6), mx = top.length ? top[0][1] : 1;
   const dove = `<h2 class="gh">Dove spendi di più <button class="link" onclick="S.chart='categorie';S.catPer='anno';go('andamento','push')">Tutte</button></h2>
-    <div class="list">${top.map(([c,v])=>{ const a = budA[c]||0, cls = a>0 ? (v>a ? 'over' : v>a*fa ? 'warn' : 'ok') : '';
-      return `<button class="hbar" onclick="apriCategoria(${esc(JSON.stringify(c))},'anno',${y})"><span>${esc(nome(c))}</span><span class="num muted">${eur0(v)}${a?` di ${eur0(a)}`:''}</span><span class="bar ${cls}"><i style="width:${v/mx*100}%"></i></span></button>`; }).join('') || '<p class="empty">Nessuna uscita quest\'anno.</p>'}</div>
+    <div class="list">${top.map(([c,v])=>{ const a = budA[c]||0, cls = buona(c) ? 'ok' : a>0 ? (v>a ? 'over' : v>a*fa ? 'warn' : 'ok') : '';
+      return `<button class="hbar" onclick="apriCategoria(${esc(JSON.stringify(c))},'anno',${y})"><span>${esc(nome(c))}${buona(c)?' <span class="pos" style="font-size:13px">spesa buona</span>':''}</span><span class="num muted">${eur0(v)}${a?` di ${eur0(a)}`:''}</span><span class="bar ${cls}"><i style="width:${v/mx*100}%"></i></span></button>`; }).join('') || '<p class="empty">Nessuna uscita quest\'anno.</p>'}</div>
     <p class="note">Verde: in linea con il budget dell'anno. Arancio: sopra il ritmo previsto. Rosso: budget dell'anno superato.</p>`;
 
   // mese per mese: dove sono andati più soldi
@@ -1039,6 +1084,7 @@ async function vOggi(){
   return `<p class="date-line">${giornoLungo(isoDi(t))}</p><h1 class="lt">Il tuo ${y}</h1>
   <div class="cols"><div>
     ${heroAnno}
+    ${schedaLiquidita(Yr, base, y)}
     ${cosaFare}
   </div><div>
     ${dove}
@@ -1125,7 +1171,7 @@ async function vBudget(){
   const tick = meseV ? (m===t.getMonth() ? t.getDate()/dim : null) : (t.getMonth() + t.getDate()/new Date(y,t.getMonth()+1,0).getDate())/12;
   const act = perCat(meseV ? rows.filter(r=>sameYM(r.data,y,m)) : rows.filter(r=>String(r.data||'').startsWith(y)));
   const val = x => Math.abs(act[x.cat]||0), bb = x => meseV ? x.m[m] : x.a;
-  const usc = bud.cats.filter(x=>x.g!=='Entrate' && x.cat!=='INVESTIMENTI');
+  const usc = bud.cats.filter(x=>x.g!=='Entrate');
   const totS = usc.reduce((s,x)=>s+val(x),0), totB = usc.reduce((s,x)=>s+bb(x),0);
   const gruppi = [...new Set(bud.cats.map(x=>x.g))].map(g => {
     const cs = bud.cats.filter(x=>x.g===g && (bb(x)>0 || val(x)>0));
@@ -1809,7 +1855,11 @@ function movimentiDaTabella(R){
         .split(/\b(addebito sdd|fattura|mand|iban|trn|data inserimento|canale|causale)\b/i)[0].replace(/\s+/g, ' ').trim();
       mov.push({ data: isoValida(va) && va < op ? va : op, importo: Math.round(imp*100)/100, descrizione: breve.slice(0, 60) || 'Movimento', originale: testo.slice(0, 240), mezzo:'CARTA DI DEBITO', tipo:'normale', categoria:'', banca: iBanca >= 0 ? String(r[iBanca] ?? '') : '' });
     }
-    if (mov.length) return mov;
+    if (mov.length) {
+      const testa = R.slice(0, h).flat().map(v => String(v ?? '')).join(' '), sf = testa.match(/saldo finale:?\s*(-?[\d.]+,\d{2})/i);
+      if (sf) mov.saldoFinale = numero(sf[1]);
+      return mov;
+    }
   }
   return null;
 }
@@ -1840,6 +1890,7 @@ async function leggiEstratto(scelti){
       conto = j.conto; costo = j.costo || 0;
     }
     if (!mov.length) throw new Error('nel file non ho trovato movimenti');
+    if (mov.saldoFinale != null) { const ultimo = mov.reduce((a, m) => m.data > a ? m.data : a, mov[0].data); if (+ultimo.slice(0, 4) === annoFile()) salvaSaldoReale(mov.saldoFinale, ultimo); }
     const r = riconcilia(mov, rows, ES.tipo);
     const daFare = r.mancanti.filter(m => !m.pronto && !m.altroAnno);
     for (let i = 0; i < daFare.length; i += 100) {
@@ -2510,7 +2561,7 @@ async function vAnni(){
   <div class="cols"><div>
   <section class="card hero">
     <p class="lead">Dal ${A[0].y} al ${A[A.length-1].y} sono entrati <b class="num">${eur0(dati.reduce((s, d) => s + d.E, 0))}</b> e usciti <b class="num">${eur0(dati.reduce((s, d) => s + d.U, 0))}</b>.</p>
-    <p class="muted" style="margin-top:8px">Investiti in tutto <b class="num">${eur0(dati.reduce((s, d) => s + d.I, 0))}</b>, che restano tuoi.</p>
+    <p class="muted" style="margin-top:8px">Di cui <b class="num pos">${eur0(dati.reduce((s, d) => s + d.I, 0))}</b> investiti: spesa buona, compresa nelle uscite.</p>
     <div style="margin-top:16px">${ch.svg}</div>
     <div class="key" style="flex-wrap:wrap">${ch.serie.map(x => `<span style="--c:${x.col}"><i></i>${x.y}</span>`).join('')}</div>
   </section>
@@ -2518,11 +2569,11 @@ async function vAnni(){
   <h2 class="gh">Anno per anno</h2>
   <div class="list">${dati.slice().reverse().map(d => { const saldo = d.E - d.U; return `<button class="row" onclick="cambiaAnno(${d.y})"><span class="row-main"><span class="row-line"><span class="row-title">${d.y}${d.mesi < 12 ? ` <span class="muted" style="font-size:13px">${d.mesi === 1 ? '1 mese' : d.mesi + ' mesi'}</span>` : ''}</span><span class="${saldo >= 0 ? 'pos' : 'neg'}">${saldo >= 0 ? '+' : '−'}${eur0(Math.abs(saldo))}</span></span>
     <span class="bar"><i style="width:${d.U/mxU*100}%"></i></span>
-    <span class="row-sub num">Uscite ${eur0(d.U)}, entrate ${eur0(d.E)}${d.I ? `, investiti ${eur0(d.I)}` : ''}, in media ${eur0(d.U/Math.max(d.mesi,1))} al mese</span></span>${chev()}</button>`; }).join('')}</div>
-  <p class="note">Tocca un anno per aprirlo in tutta l'app. Il risparmio è entrate meno uscite, senza contare gli investimenti.</p>
+    <span class="row-sub num">Uscite ${eur0(d.U)}${d.I ? ` (di cui <span class="pos">${eur0(d.I)} investiti</span>)` : ''}, entrate ${eur0(d.E)}, in media ${eur0(d.U/Math.max(d.mesi,1))} al mese</span></span>${chev()}</button>`; }).join('')}</div>
+  <p class="note">Tocca un anno per aprirlo in tutta l'app. Il saldo è entrate meno uscite, investimenti compresi: sono una spesa buona, in verde.</p>
   </div><div>
   <h2 class="gh">Categorie</h2>
-  <div class="list">${righeCat.map(x => { const d = y1 && y2 && x.v[y1] ? (x.v[y2]||0)/x.v[y1] - 1 : null; return `<div class="row"><span class="row-main"><span class="row-title">${esc(nome(x.c))}</span><span class="row-sub num">${eur0(x.tot)} in tutto${d != null ? `, ${y2} contro ${y1}: <span class="${d > 0.02 ? 'neg' : d < -0.02 ? 'pos' : 'muted'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${nf0.format(Math.abs(d*100))}%</span>` : ''}</span></span>${barre(x.v)}</div>`; }).join('')}</div>
+  <div class="list">${righeCat.map(x => { const d = y1 && y2 && x.v[y1] ? (x.v[y2]||0)/x.v[y1] - 1 : null; return `<div class="row"><span class="row-main"><span class="row-title">${esc(nome(x.c))}</span><span class="row-sub num">${eur0(x.tot)} in tutto${buona(x.c) ? ', <span class="pos">spesa buona</span>' : ''}${d != null ? `, ${y2} contro ${y1}: <span class="${(buona(x.c) ? -d : d) > 0.02 ? 'neg' : (buona(x.c) ? -d : d) < -0.02 ? 'pos' : 'muted'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${nf0.format(Math.abs(d*100))}%</span>` : ''}</span></span>${barre(x.v)}</div>`; }).join('')}</div>
   <p class="note">Le barre sono gli anni dal ${A[0].y} al ${A[A.length-1].y}, l'ultimo in blu.${dati.some(d => d.mesi < 12) ? ' Gli anni con meno di 12 mesi sono parziali.' : ''}</p>
   </div></div>`;
 }
@@ -2547,7 +2598,7 @@ function controlliAnno(a){
   if (segni.length) out.push(`${segni.length === 1 ? 'Una voce ha' : `${segni.length} voci hanno`} il segno opposto a entrata/uscita: ${segni.slice(0, 3).map(r => `${esc(frase(r.descrizione))} (${fmt(r.valore)})`).join('; ')}.`);
   const somme = R.filter(r => /\b(SOMMA|SOMMATORIA|TOTALE|VARIE)\b/i.test(String(r.descrizione)) && Math.abs(r.valore) >= 100);
   if (somme.length) out.push(`${somme.length === 1 ? 'Una voce riassume' : `${somme.length} voci riassumono`} più spese in una (${somme.slice(0, 3).map(r => esc(frase(r.descrizione))).join('; ')}): dentro l'anno pesano tutte in un mese solo.`);
-  const inv = R.filter(investimento); if (inv.length) out.push(`Investimenti: ${eur0(investito(inv))} netti, esclusi da entrate e uscite.`);
+  const inv = R.filter(investimento); if (inv.length) out.push(`Investimenti: ${eur0(investito(inv))} netti, contati tra le uscite ma sono una spesa buona: più investi, più il saldo dell'anno scende senza che tu abbia perso soldi.`);
   return out;
 }
 async function apriPerche(y1, y2){
@@ -2559,9 +2610,9 @@ async function apriPerche(y1, y2){
   const a1 = A.find(a => a.y === y1), a2 = A.find(a => a.y === y2);
   const E1 = entrate(a1.righe), E2 = entrate(a2.righe), U1 = uscite(a1.righe), U2 = uscite(a2.righe);
   const per = (L, f) => { const o = {}; L.filter(f).forEach(r => { const c = r.tipologia || 'ALTRO'; o[c] = (o[c] || 0) + Math.abs(r.valore); }); return o; };
-  const c1 = per(a1.righe, spesa), c2 = per(a2.righe, spesa), i1 = per(a1.righe, r => r.valore > 0 && !investimento(r)), i2 = per(a2.righe, r => r.valore > 0 && !investimento(r));
+  const c1 = per(a1.righe, spesa), c2 = per(a2.righe, spesa), i1 = per(a1.righe, r => r.valore > 0), i2 = per(a2.righe, r => r.valore > 0);
   const delta = (o1, o2) => [...new Set([...Object.keys(o1), ...Object.keys(o2)])].map(c => ({c, a:o1[c] || 0, b:o2[c] || 0, d:(o2[c] || 0) - (o1[c] || 0)}));
-  const dc = delta(c1, c2), su = dc.filter(x => x.d > 0).sort((p, q) => q.d - p.d).slice(0, 5), giu = dc.filter(x => x.d < 0).sort((p, q) => p.d - q.d).slice(0, 5);
+  const dc = delta(c1, c2).filter(x => !buona(x.c)), I1 = investito(a1.righe), I2 = investito(a2.righe), su = dc.filter(x => x.d > 0).sort((p, q) => q.d - p.d).slice(0, 5), giu = dc.filter(x => x.d < 0).sort((p, q) => p.d - q.d).slice(0, 5);
   const di = delta(i1, i2).filter(x => Math.abs(x.d) >= 50).sort((p, q) => Math.abs(q.d) - Math.abs(p.d)).slice(0, 4);
   const piuGrandi = (L, cat) => L.filter(r => spesa(r) && r.tipologia === cat).sort((p, q) => p.valore - q.valore).slice(0, 3).map(r => `${esc(frase(r.descrizione))} ${fmt(-r.valore)}`).join(', ');
   const n1 = new Set(a1.righe.map(r => String(r.data).slice(0, 7))).size || 1, n2 = new Set(a2.righe.map(r => String(r.data).slice(0, 7))).size || 1;
@@ -2570,13 +2621,14 @@ async function apriPerche(y1, y2){
   const top = a2.righe.filter(spesa).sort((p, q) => p.valore - q.valore).slice(0, 6);
   const riga = (t, s, v, cls) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${t}</span><span class="num ${cls || ''}">${v}</span></span>${s ? `<span class="row-sub">${s}</span>` : ''}</span></div>`;
   const sg = d => (d > 0 ? '+' : d < 0 ? '−' : '') + eur0(Math.abs(d));
-  const domanda = `Confronta il ${y1} con il ${y2}. Entrate ${eur0(E1)} contro ${eur0(E2)}, uscite ${eur0(U1)} contro ${eur0(U2)} (mesi con dati: ${n1} e ${n2}). Categorie di spesa cresciute: ${su.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}; calate: ${giu.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}. Entrate cambiate: ${di.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}. Controlli sui dati del ${y2}: ${controlliAnno(a2).map(t => t.replace(/<[^>]+>/g, '')).join(' ') || 'nessun problema'}. Spiegami in poche righe dove ho perso o guadagnato di più, perché, e quali di queste differenze dipendono da come ho registrato i dati.`;
+  const domanda = `Confronta il ${y1} con il ${y2}. Entrate ${eur0(E1)} contro ${eur0(E2)}, uscite ${eur0(U1)} contro ${eur0(U2)} (mesi con dati: ${n1} e ${n2}). Investimenti (spesa buona, già nelle uscite): ${eur0(I1)} contro ${eur0(I2)}. Categorie di spesa cresciute: ${su.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}; calate: ${giu.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}. Entrate cambiate: ${di.map(x => `${x.c} ${sg(x.d)}`).join(', ') || 'nessuna'}. Controlli sui dati del ${y2}: ${controlliAnno(a2).map(t => t.replace(/<[^>]+>/g, '')).join(' ') || 'nessun problema'}. Spiegami in poche righe dove ho perso o guadagnato di più, perché, e quali di queste differenze dipendono da come ho registrato i dati.`;
   openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>Perché è cambiato</h2><span></span></div>
   <div class="sheet-scroll">
     <div class="chips" style="margin-top:8px">${anni.slice(0, -1).map(y => `<button class="chip ${y === y1 ? 'on' : ''}" onclick="apriPerche(${y},${y2})">${y}</button>`).join('')}<span class="muted" style="align-self:center;padding:0 4px">contro</span>${anni.slice(1).map(y => `<button class="chip ${y === y2 ? 'on' : ''}" onclick="apriPerche(${y1},${y})">${y}</button>`).join('')}</div>
     <div class="stat3"><div><small>Entrate</small><b class="${E2 >= E1 ? 'pos' : 'neg'}">${sg(E2 - E1)}</b></div><div><small>Uscite</small><b class="${U2 <= U1 ? 'pos' : 'neg'}">${sg(U2 - U1)}</b></div><div><small>Risparmio</small><b class="${(E2 - U2) >= (E1 - U1) ? 'pos' : 'neg'}">${sg((E2 - U2) - (E1 - U1))}</b></div></div>
     <p class="note" style="margin:0 8px 16px">${y1}: ${eur0(E1)} entrate, ${eur0(U1)} uscite in ${n1} mesi. ${y2}: ${eur0(E2)} entrate, ${eur0(U2)} uscite in ${n2} mesi. Media mensile delle uscite: ${eur0(U1 / n1)} contro ${eur0(U2 / n2)}.</p>
     ${su.length ? `<p class="sublabel">Dove hai speso di più</p><div class="list">${su.map(x => riga(esc(nome(x.c)), `${eur0(x.a)} nel ${y1}, ${eur0(x.b)} nel ${y2}${piuGrandi(a2.righe, x.c) ? `. Le più grandi: ${piuGrandi(a2.righe, x.c)}` : ''}`, sg(x.d), 'neg')).join('')}</div>` : ''}
+    ${I1 || I2 ? `<p class="sublabel">Investimenti, spesa buona</p><div class="list">${riga('Investiti', `${eur0(I1)} nel ${y1}, ${eur0(I2)} nel ${y2}: sono già nelle uscite`, sg(I2 - I1), I2 >= I1 ? 'pos' : 'muted')}</div>` : ''}
     ${giu.length ? `<p class="sublabel">Dove hai risparmiato</p><div class="list">${giu.map(x => riga(esc(nome(x.c)), `${eur0(x.a)} nel ${y1}, ${eur0(x.b)} nel ${y2}`, sg(x.d), 'pos')).join('')}</div>` : ''}
     ${di.length ? `<p class="sublabel">Entrate cambiate</p><div class="list">${di.map(x => riga(esc(nome(x.c)), `${eur0(x.a)} nel ${y1}, ${eur0(x.b)} nel ${y2}`, sg(x.d), x.d > 0 ? 'pos' : 'neg')).join('')}</div>` : ''}
     ${mesiStrani.length ? `<p class="sublabel">Mesi fuori dal normale nel ${y2}</p><div class="list">${mesiStrani.map(x => riga(mese(x.m), `una volta e mezza la media del ${y2} (${eur0(x.med)})`, eur0(x.u), 'warn')).join('')}</div>` : ''}
