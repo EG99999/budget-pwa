@@ -23,7 +23,7 @@
   --bg:#F2F2F7;--card:#FFFFFF;--fill:rgba(118,118,128,.12);--fill-2:rgba(118,118,128,.2);--seg-on:#FFFFFF;
   --sep:rgba(60,60,67,.16);--text:#1C1C1E;--text-2:rgba(60,60,67,.68);--text-3:rgba(60,60,67,.36);
   --accent:#007AFF;--accent-text:#0062CC;--pos:#2B7A3E;--neg:#B3261E;--warn:#9A5B00;
-  --bar:rgba(60,60,67,.5);--bar-over:rgba(196,41,28,.6);--bar-warn:rgba(176,112,0,.55);--track:rgba(118,118,128,.16);
+  --bar:rgba(60,60,67,.5);--bar-ok:rgba(43,140,70,.62);--bar-over:rgba(196,41,28,.6);--bar-warn:rgba(176,112,0,.55);--track:rgba(118,118,128,.16);
   --line-1:rgba(60,60,67,.62);--line-2:rgba(0,122,255,.62);--grid:rgba(60,60,67,.1);
   --chrome:rgba(249,249,249,.82);--scrim:rgba(0,0,0,.3);
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
@@ -32,7 +32,7 @@
   --bg:#000000;--card:#1C1C1E;--fill:rgba(118,118,128,.24);--fill-2:rgba(118,118,128,.32);--seg-on:#48484A;
   --sep:rgba(84,84,88,.6);--text:#F2F2F7;--text-2:rgba(235,235,245,.64);--text-3:rgba(235,235,245,.32);
   --accent:#0A84FF;--accent-text:#4DA3FF;--pos:#5CC774;--neg:#FF6B60;--warn:#E0A43C;
-  --bar:rgba(235,235,245,.5);--bar-over:rgba(255,107,96,.62);--bar-warn:rgba(224,164,60,.6);--track:rgba(118,118,128,.28);
+  --bar:rgba(235,235,245,.5);--bar-ok:rgba(92,199,116,.62);--bar-over:rgba(255,107,96,.62);--bar-warn:rgba(224,164,60,.6);--track:rgba(118,118,128,.28);
   --line-1:rgba(235,235,245,.6);--line-2:rgba(10,132,255,.72);--grid:rgba(235,235,245,.1);
   --chrome:rgba(24,24,26,.8);--scrim:rgba(0,0,0,.5);
 }}
@@ -40,7 +40,7 @@
   --bg:#000000;--card:#1C1C1E;--fill:rgba(118,118,128,.24);--fill-2:rgba(118,118,128,.32);--seg-on:#48484A;
   --sep:rgba(84,84,88,.6);--text:#F2F2F7;--text-2:rgba(235,235,245,.64);--text-3:rgba(235,235,245,.32);
   --accent:#0A84FF;--accent-text:#4DA3FF;--pos:#5CC774;--neg:#FF6B60;--warn:#E0A43C;
-  --bar:rgba(235,235,245,.5);--bar-over:rgba(255,107,96,.62);--bar-warn:rgba(224,164,60,.6);--track:rgba(118,118,128,.28);
+  --bar:rgba(235,235,245,.5);--bar-ok:rgba(92,199,116,.62);--bar-over:rgba(255,107,96,.62);--bar-warn:rgba(224,164,60,.6);--track:rgba(118,118,128,.28);
   --line-1:rgba(235,235,245,.6);--line-2:rgba(10,132,255,.72);--grid:rgba(235,235,245,.1);
   --chrome:rgba(24,24,26,.8);--scrim:rgba(0,0,0,.5);
 }
@@ -102,12 +102,12 @@ button.row:active{background:var(--fill)}
 /* barre con la tacca di oggi */
 .bar{position:relative;display:block;height:4px;border-radius:2px;background:var(--track);margin:var(--s1) 0}
 .bar>i{display:block;height:100%;border-radius:2px;background:var(--bar)}
-.bar.warn>i{background:var(--bar-warn)}.bar.over>i{background:var(--bar-over)}
+.bar.ok>i{background:var(--bar-ok)}.bar.warn>i{background:var(--bar-warn)}.bar.over>i{background:var(--bar-over)}
 .tick{position:absolute;top:-4px;width:2px;height:12px;border-radius:1px;background:var(--text)}
 .hero .lead{font-size:20px;line-height:1.4;letter-spacing:-.01em}
 .pace{position:relative;height:8px;border-radius:4px;background:var(--track);margin:var(--s3) 0 var(--s1)}
 .pace>i{display:block;height:100%;border-radius:4px;background:var(--bar)}
-.pace>i.over{background:var(--bar-over)}
+.pace>i.ok{background:var(--bar-ok)}.pace>i.warn{background:var(--bar-warn)}.pace>i.over{background:var(--bar-over)}
 .pace .tick{top:-8px;height:24px}
 .legend-row{display:flex;justify-content:space-between;gap:var(--s2);font-size:13px;color:var(--text-2)}
 .hero .foot{margin-top:var(--s2);padding-top:var(--s2);border-top:1px solid var(--sep);font-size:15px;color:var(--text-2)}
@@ -218,6 +218,13 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .keys svg.i{margin:auto}
 .tx-amount{text-align:center;font-size:32px;font-weight:600;letter-spacing:-.02em;margin-top:var(--s1);font-variant-numeric:tabular-nums}
 .tx-desc{text-align:center;margin-bottom:var(--s2);color:var(--text-2)}
+
+/* tastiera esterna */
+kbd{font:inherit;font-size:13px;min-width:32px;height:32px;padding:0 var(--s1);border-radius:8px;background:var(--fill);box-shadow:inset 0 -1px 0 var(--sep);display:inline-grid;place-items:center;color:var(--text);white-space:nowrap}
+.amount{cursor:pointer}
+.hint-tastiera{display:none;text-align:center;font-size:13px;color:var(--text-2);margin-bottom:var(--s1)}
+body.tastiera .keys{display:none}
+body.tastiera .hint-tastiera{display:block}
 
 /* consulente */
 .msgs{display:flex;flex-direction:column;gap:var(--s2);padding-bottom:var(--s6)}
@@ -627,7 +634,7 @@ function applyTheme(){
   document.documentElement.dataset.theme = t; S.theme = t;
 }
 const VIEWS = {
-  oggi:{t:'Oggi',r:vOggi},
+  oggi:{t:'Riepilogo',r:vOggi},
   movimenti:{t:'Movimenti',r:vMov,after:drawMov,w:'stretto',act:()=>`<button class="icon-btn" aria-label="Esporta CSV" onclick="exportCSV()">${ico('Download')}</button>`},
   budget:{t:'Budget',r:vBudget},
   analisi:{t:'Analisi',r:vAnalisi},
@@ -639,7 +646,7 @@ const VIEWS = {
   consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,w:'stretto',act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi',w:'stretto'}
 };
-function go(v, anim){ S.view=v; render(anim||'fade', true); window.scrollTo(0,0); }
+function go(v, anim){ S.view=v; const p = render(anim||'fade', true); window.scrollTo(0,0); return p; }
 let _rid = 0;
 async function render(anim, nuovo){
   const V = VIEWS[S.view], id = ++_rid, c = $('#content');
@@ -668,16 +675,17 @@ function watchTitle(){
 function drawTabbar(){
   const cur = VIEWS[S.view].parent || S.view;
   const t = (v,i,l) => `<button class="tab ${cur===v?'on':''}" onclick="go('${v}')" ${cur===v?'aria-current="page"':''}>${ico(i)}<span>${l}</span></button>`;
-  $('#tabbar').innerHTML = t('oggi','CalendarDays','Oggi') + t('movimenti','List','Movimenti')
+  $('#tabbar').innerHTML = t('oggi','LayoutDashboard','Riepilogo') + t('movimenti','List','Movimenti')
     + `<button class="tab-add" onclick="openAdd()" aria-label="Nuova voce"><span>${ico('Plus')}</span></button>`
     + t('budget','ChartPie','Budget') + t('analisi','ChartColumn','Analisi');
 }
 function drawSide(){
-  const it = (v,i,l) => `<button class="side-item ${S.view===v?'on':''}" onclick="go('${v}')">${ico(i)}${l}</button>`;
+  const tasto = {oggi:'1',movimenti:'2',budget:'3',consulente:'C'};
+  const it = (v,i,l) => `<button class="side-item ${S.view===v?'on':''}" onclick="go('${v}')" ${tasto[v]?`title="${l} (tasto ${tasto[v]})" aria-keyshortcuts="${tasto[v]}"`:''}>${ico(i)}${l}</button>`;
   const acc = msalInstance.getActiveAccount();
   $('#side').innerHTML = `<div class="side-head"><span class="app-ic">${ico('Wallet')}</span>Budget</div>
-    <button class="btn" onclick="openAdd()">${ico('Plus')}Nuova voce</button>
-    ${it('oggi','CalendarDays','Oggi')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
+    <button class="btn" onclick="openAdd()" title="Nuova voce (tasto N)" aria-keyshortcuts="N">${ico('Plus')}Nuova voce</button>
+    ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
     <h3>Analisi</h3>
     ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('salute','Activity','Salute finanziaria')}${it('casa','House','Casa')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}${it('impostazioni','SlidersHorizontal','Impostazioni')}
@@ -697,60 +705,150 @@ function shiftM(key,d,soloAnno){
   if (key==='coabM') { _coabUnlocked=false; _coabAdding=false; }
   render();
 }
-function seg(items, cur, fn){ return `<div class="seg" role="tablist">${items.map(([v,l])=>`<button role="tab" aria-selected="${cur===v}" class="${cur===v?'on':''}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`; }
+function seg(items, cur, fn){ return `<div class="seg" role="tablist">${items.map(([v,l])=>`<button role="tab" data-f="seg-${v}" aria-selected="${cur===v}" class="${cur===v?'on':''}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`; }
 function txRow(r, conData){
   const e = r.valore>0, tit = frase(r.descrizione) || nome(r.tipologia);
   return `<button class="row" onclick="openTx(${r._index})"><span class="ic">${icoCat(r.tipologia)}</span><span class="row-main"><span class="row-title">${esc(tit)}</span><span class="row-sub">${esc(nome(r.tipologia))}${conData?', '+giornoBreve(r.data):''}</span></span><span class="amt ${e?'pos':''}">${fmt(Math.abs(r.valore))}</span></button>`;
 }
+// verde = categoria buona: entro il budget e al passo con il calendario (o entrata raggiunta); arancio = entro il budget ma troppo veloce; rosso = oltre
+function tonoBudget(p, tick, entrata){
+  if (entrata) return p>=1 ? 'ok' : '';
+  if (p>1) return 'over';
+  return tick==null || p<=tick+0.001 ? 'ok' : 'warn';
+}
 function budRow(c, speso, budget, tick, entrata){
   const p = budget>0 ? speso/budget : (speso>0 ? 2 : 0);
-  const cls = entrata ? '' : p>1 ? 'over' : p>.9 ? 'warn' : '';
+  const cls = tonoBudget(p, tick, entrata);
   const right = entrata
     ? (speso>=budget ? `<span class="pos">raggiunto</span>` : `<span class="muted">mancano ${eur0(budget-speso)}</span>`)
-    : (speso>budget ? `<span class="neg">${eur0(speso-budget)} oltre</span>` : `<span class="muted">restano ${eur0(budget-speso)}</span>`);
+    : (speso>budget ? `<span class="neg">${eur0(speso-budget)} oltre</span>` : `<span class="${cls==='ok'?'pos':'warn'}">restano ${eur0(budget-speso)}</span>`);
   return `<div class="row"><span class="ic">${icoCat(c)}</span><span class="row-main"><span class="row-line"><span class="row-title">${esc(nome(c))}</span>${right}</span><span class="bar ${cls}"><i style="width:${Math.min(p,1)*100}%"></i>${tick!=null?`<b class="tick" style="left:${tick*100}%"></b>`:''}</span><span class="row-sub num">${fmt(speso)} di ${budget?eur0(budget):'0 €, non previsto'}</span></span></div>`;
 }
 
-// ── OGGI ──────────────────────────────────────────────────────
+// ── RIEPILOGO: anno, rimedi, categorie, mesi, mese corrente ───
+// liquidità a fine mese contro quella del 1° gennaio (linea tratteggiata)
+function annoChart(punti, base, y, tono){
+  const W=344, H=168, L=48, B=24, T=8, w=W-L, h=H-B-T;
+  const vals = [base, ...punti.map(p=>p.v)], lo = Math.min(...vals), hi = Math.max(...vals), span = Math.max(hi-lo, 1);
+  const step = [50,100,250,500,1000,2000,2500,5000,10000,20000].find(s=>span/s<=4) || 50000;
+  const y0 = Math.floor(lo/step)*step, y1 = Math.ceil(hi/step)*step || step;
+  const X = x => L + x/12*w, Yp = v => T + h - (v-y0)/(y1-y0||1)*h;
+  const col = tono==='crescita' ? 'var(--bar-ok)' : tono==='perdita' ? 'var(--bar-over)' : 'var(--line-1)';
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Soldi disponibili mese per mese nel ${y}">`;
+  for (let v=y0; v<=y1+0.5; v+=step) s += `<line x1="${L}" x2="${W}" y1="${Yp(v)}" y2="${Yp(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${L-8}" y="${Yp(v)+4}" text-anchor="end">${nf0.format(v)}</text>`;
+  s += `<line x1="${L}" x2="${W}" y1="${Yp(base)}" y2="${Yp(base)}" stroke="var(--text-3)" stroke-width="1" stroke-dasharray="4 4"/>`;
+  const pts = [[0,base], ...punti.map(p=>[p.x,p.v])];
+  s += `<path d="${pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Yp(p[1]).toFixed(1)).join(' ')}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linejoin="round"/>`;
+  const ul = pts[pts.length-1];
+  s += `<circle cx="${X(ul[0])}" cy="${Yp(ul[1])}" r="3" fill="var(--card)" stroke="${col}" stroke-width="1.5"/>`;
+  for (let i=0;i<12;i++) s += `<text x="${X(i+.5)}" y="${H-4}" text-anchor="middle">${mese(i).slice(0,3).toLowerCase()}</text>`;
+  return s + '</svg>';
+}
+function apriMese(y, m){ S.f = {q:'', per:'mese', senso:'', cat:'', sort:'data-desc', limit:300}; S.movM = {y, m}; go('movimenti'); }
+function chiediPiano(perdita){
+  go('consulente','push').then(() => chiedi(perdita
+    ? 'Da inizio anno sono in perdita: fammi un piano concreto, categoria per categoria, per tornare in pari entro dicembre.'
+    : 'Fammi un piano concreto per risparmiare di più da qui a dicembre, categoria per categoria.'));
+}
 async function vOggi(){
   const rows = await getTransazioni();
-  let bud = null; try { bud = await getBudget(); } catch(e) {}
-  const t = new Date(), y = t.getFullYear(), m = t.getMonth(), gg = t.getDate(), dim = new Date(y,m+1,0).getDate(), f = gg/dim;
+  const [rb, rc, ra] = await Promise.allSettled([getBudget(), getCfo(), getAbbonamenti()]);
+  const bud = rb.status==='fulfilled' ? rb.value : null, cfo = rc.status==='fulfilled' ? rc.value : null, abb = ra.status==='fulfilled' ? ra.value : null;
+  const t = new Date(), y = t.getFullYear(), m = t.getMonth(), gg = t.getDate(), dim = new Date(y,m+1,0).getDate(), f = gg/dim, fa = (m+f)/12;
+
+  // l'anno: situazione iniziale contro oggi
+  const Yr = rows.filter(r=>String(r.data||'').startsWith(y)), Ey = entrate(Yr), Uy = uscite(Yr), catY = perCat(Yr.filter(r=>r.valore<0));
+  const mesi = []; for (let i=0;i<=m;i++) { const Lm = Yr.filter(r=>sameYM(r.data,y,i)); mesi.push({i, U:uscite(Lm), E:entrate(Lm), cat:perCat(Lm.filter(r=>r.valore<0))}); }
+  const pIni = cfo && cfo.params.find(p=>/liquidit.*iniziale/i.test(p.l));
+  const base = pIni && typeof pIni.v==='number' ? pIni.v : null, b0 = base||0;
+  let acc = b0; const punti = mesi.map(x => ({ x: x.i===m ? m+f : x.i+1, v: acc += x.E - x.U }));
+  const saldoY = Ey - Uy, soglia = Math.max(50, Math.abs(b0)*0.01);
+  const tono = saldoY > soglia ? 'crescita' : saldoY < -soglia ? 'perdita' : 'pari';
+  const verdetto = tono==='crescita' ? `Da inizio anno sei in <b class="pos">crescita di ${eur0(saldoY)}</b>.`
+    : tono==='perdita' ? `Da inizio anno sei in <b class="neg">perdita di ${eur0(-saldoY)}</b>.` : `Da inizio anno sei <b>in pari</b>.`;
+  const heroAnno = `<section class="card hero" aria-label="L'anno in breve">
+    <p class="lead">${verdetto}</p>
+    <p class="muted" style="margin-top:8px">${base!=null ? `Avevi <b class="num">${eur0(base)}</b> il 1° gennaio, oggi ne hai <b class="num">${eur0(b0+saldoY)}</b>.` : `Entrate ${eur0(Ey)}, uscite ${eur0(Uy)}.`}</p>
+    <div style="margin-top:16px">${annoChart(punti, b0, y, tono)}</div>
+    <div class="key"><span style="--c:${tono==='crescita'?'var(--bar-ok)':tono==='perdita'?'var(--bar-over)':'var(--line-1)'}"><i></i>${base!=null?'Soldi disponibili':'Saldo da inizio anno'}</span><span style="--c:var(--text-3)"><i></i>1° gennaio</span></div>
+  </section>`;
+
+  // cosa si può fare: rimedi con il loro valore in euro
+  const rimedi = [];
+  const mesiRestanti = Math.max(12 - (m+f), 0.5);
+  if (tono==='perdita') rimedi.push({v:1e9, t:`Per tornare in pari entro dicembre servono circa <b class="num">${eur0(-saldoY/mesiRestanti)} al mese</b> in meno di uscite, o in più di entrate.`});
+  if (bud) bud.cats.filter(x=>x.g!=='Entrate' && x.a>0).forEach(x => {
+    const speso = Math.abs(catY[x.cat]||0), atteso = x.a*fa, oltre = speso - atteso;
+    if (oltre > Math.max(50, atteso*0.05)) {
+      const resto = (x.a - speso)/mesiRestanti;
+      rimedi.push({v:oltre, t: resto>0
+        ? `<b>${esc(nome(x.cat))}</b>: ${eur0(oltre)} sopra il ritmo del budget. Restando sotto <b class="num">${eur0(resto)} al mese</b> fino a dicembre rientri nei ${eur0(x.a)} dell'anno.`
+        : `<b>${esc(nome(x.cat))}</b>: hai già superato il budget dell'anno di <b class="num">${eur0(speso-x.a)}</b>. Da qui a dicembre conviene fermare le spese non necessarie.`});
+    }
+  });
+  if (abb) abb.L.filter(a=>(a.val==='VALUTARE'||a.val==='ELIMINARE') && typeof a.imp==='number' && a.cad==='MENSILE')
+    .forEach(a => rimedi.push({v:a.imp*12, t:`Abbonamento <b>${esc(a.nome)}</b> da valutare: disdirlo vale <b class="num">${eur0(a.imp*12)} all'anno</b>.`}));
+  const pTarget = cfo && cfo.params.find(p=>/target.*saving|saving.*target|risparmio/i.test(p.l));
+  const target = pTarget && typeof pTarget.v==='number' && pTarget.v>0 && pTarget.v<1 ? pTarget.v : 0.2;
+  const inv = Yr.filter(r=>r.valore<0&&r.tipologia==='INVESTIMENTI').reduce((s,r)=>s-r.valore,0);
+  const manca = target*Ey - (Ey-Uy+inv);
+  if (manca > 0 && Ey > 0) rimedi.push({v:manca*0.5, t:`Per risparmiare il ${pct(target)} delle entrate, investimenti compresi, servirebbero circa <b class="num">${eur0(manca/(m+f))} al mese</b> in più.`});
+  rimedi.sort((a,b)=>b.v-a.v);
+  const cosaFare = `<h2 class="gh">Cosa puoi fare</h2>
+    <div class="list">${rimedi.length ? rimedi.slice(0,4).map(r=>`<div class="row"><span class="ic">${ico('Lightbulb')}</span><span class="row-main" style="padding:8px 0;line-height:1.5"><span>${r.t}</span></span></div>`).join('') : '<p class="empty">Sei in linea con il budget: nessun intervento urgente.</p>'}
+    <button class="row link" onclick="chiediPiano(${tono==='perdita'})"><span class="ic">${ico('Sparkles')}</span><span class="row-main">Chiedi un piano al consulente</span>${chev()}</button></div>`;
+
+  // dove si spende di più nell'anno
+  const budA = {}; if (bud) bud.cats.forEach(x=>budA[x.cat]=x.a);
+  const top = Object.entries(catY).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]).slice(0,6), mx = top.length ? top[0][1] : 1;
+  const dove = `<h2 class="gh">Dove spendi di più <button class="link" onclick="S.chart='categorie';S.catPer='anno';go('andamento','push')">Tutte</button></h2>
+    <div class="list">${top.map(([c,v])=>{ const a = budA[c]||0, cls = a>0 ? (v>a ? 'over' : v>a*fa ? 'warn' : 'ok') : '';
+      return `<button class="hbar" onclick='filtraCat(${JSON.stringify(c)},false)'><span>${esc(nome(c))}</span><span class="num muted">${eur0(v)}${a?` di ${eur0(a)}`:''}</span><span class="bar ${cls}"><i style="width:${v/mx*100}%"></i></span></button>`; }).join('') || '<p class="empty">Nessuna uscita quest\'anno.</p>'}</div>
+    <p class="note">Verde: in linea con il budget dell'anno. Arancio: sopra il ritmo previsto. Rosso: budget dell'anno superato.</p>`;
+
+  // mese per mese: dove sono andati più soldi
+  const perMese = `<h2 class="gh">Mese per mese</h2>
+    <div class="list">${mesi.filter(x=>x.U||x.E).map(x => { const c = Object.entries(x.cat).sort((a,b)=>a[1]-b[1])[0], s = x.E - x.U;
+      return `<button class="row" onclick="apriMese(${y},${x.i})"><span class="row-main"><span class="row-title">${mese(x.i)}</span><span class="row-sub">${c?`Soprattutto ${esc(nome(c[0]).toLowerCase())}: ${eur0(-c[1])}, ${pct(-c[1]/(x.U||1))}`:'Nessuna uscita'}</span></span><span style="text-align:right;display:flex;flex-direction:column"><span class="amt">${eur0(x.U)}</span><span class="row-sub ${s>=0?'pos':'neg'}">saldo ${meno(s,eur0)}</span></span>${chev()}</button>`; }).reverse().join('')}</div>`;
+
+  // il mese corrente
   const L = rows.filter(r=>sameYM(r.data,y,m)), U = uscite(L), E = entrate(L), act = perCat(L);
   const fisse = new Set(bud ? bud.cats.filter(x=>x.g==='Uscite fisse').map(x=>x.cat) : ['CASA','TELEFONIA','INVESTIMENTI']);
   const variabili = U - L.filter(r=>r.valore<0 && fisse.has(r.tipologia)).reduce((s,r)=>s-r.valore,0);
   const proiez = E - U - variabili/gg*(dim-gg);
   const budU = bud && bud.tot['TOT USCITE'] ? parseFloat(bud.tot['TOT USCITE'][m+1])||0 : 0;
-  const base = E>0 ? E : budU;
+  const baseM = E>0 ? E : budU;
   let hero;
-  if (base>0) {
-    hero = `<p class="lead">Hai speso <b class="num">${eur0(U)}</b> dei <b class="num">${eur0(base)}</b> ${E>0?'entrati':'previsti'} questo mese.</p>
-      <div class="pace" role="img" aria-label="Speso ${pct(U/base)}, mese trascorso ${pct(f)}"><i class="${U>base?'over':''}" style="width:${Math.min(U/base,1)*100}%"></i><b class="tick" style="left:${f*100}%"></b></div>
-      <div class="legend-row"><span>Speso ${pct(U/base)}</span><span>Oggi, ${pct(f)} del mese</span></div>
+  if (baseM>0) {
+    hero = `<p class="lead">Hai speso <b class="num">${eur0(U)}</b> dei <b class="num">${eur0(baseM)}</b> ${E>0?'entrati':'previsti'} questo mese.</p>
+      <div class="pace" role="img" aria-label="Speso ${pct(U/baseM)}, mese trascorso ${pct(f)}"><i class="${tonoBudget(U/baseM, f, false)}" style="width:${Math.min(U/baseM,1)*100}%"></i><b class="tick" style="left:${f*100}%"></b></div>
+      <div class="legend-row"><span>Speso ${pct(U/baseM)}</span><span>Oggi, ${pct(f)} del mese</span></div>
       ${E>0?`<p class="foot">Al ritmo di adesso chiudi ${mese(m).toLowerCase()} con circa <b class="${proiez>=0?'pos':'neg'}">${meno(proiez,eur0)}</b>.</p>`:''}`;
   } else hero = `<p class="lead">Hai speso <b class="num">${eur0(U)}</b> questo mese.</p>`;
   let watch = '';
   if (bud) {
     const w = bud.cats.filter(x=>x.g!=='Entrate').map(x=>({c:x.cat, s:Math.abs(act[x.cat]||0), b:x.m[m]}))
-      .filter(o=>o.s>0 && o.s>o.b*.9).sort((a,b)=>(b.s-b.b)-(a.s-a.b)).slice(0,6);
+      .filter(o=>o.s>0 && tonoBudget(o.b>0?o.s/o.b:2, f, false)!=='ok').sort((a,b)=>(b.s-b.b)-(a.s-a.b)).slice(0,6);
     watch = `<h2 class="gh">Da tenere d'occhio</h2>` + (w.length
       ? `<div class="list">${w.map(o=>budRow(o.c,o.s,o.b,f)).join('')}</div><p class="note">La tacca indica il giorno di oggi: se la barra la supera, stai spendendo più in fretta del previsto.</p>`
       : `<div class="card muted">Tutte le categorie sono nei limiti.</div>`);
   }
   const ultimi = [...L].sort((a,b)=>String(b.data).localeCompare(String(a.data))||b._index-a._index).slice(0,5);
-  const Yr = rows.filter(r=>String(r.data||'').startsWith(y)), Ey = entrate(Yr), Uy = uscite(Yr);
-  const inv = Yr.filter(r=>r.valore<0&&r.tipologia==='INVESTIMENTI').reduce((s,r)=>s-r.valore,0);
-  const sr = Ey>0 ? (Ey-Uy+inv)/Ey : 0;
-  const riga = (l,v,cls='') => `<button class="row" onclick="go('andamento','push')"><span class="row-main"><span class="row-line"><span>${l}</span><span class="num ${cls}">${v}</span></span></span>${chev()}</button>`;
-  return `<p class="date-line">${giornoLungo(isoDi(t))}</p><h1 class="lt">${mese(m)}</h1>
+  return `<p class="date-line">${giornoLungo(isoDi(t))}</p><h1 class="lt">Il tuo ${y}</h1>
+  <div class="cols"><div>
+    ${heroAnno}
+    ${cosaFare}
+  </div><div>
+    ${dove}
+    ${perMese}
+  </div></div>
+  <h2 class="gh" style="margin-top:48px;font-size:24px">Questo mese: ${mese(m).toLowerCase()}</h2>
   <div class="cols"><div>
     <section class="card hero" aria-label="Il mese in breve">${hero}</section>
     ${watch}
   </div><div>
     <h2 class="gh">Ultimi movimenti <button class="link" onclick="go('movimenti')">Vedi tutti</button></h2>
     <div class="list">${ultimi.length?ultimi.map(r=>txRow(r,true)).join(''):'<p class="empty">Nessun movimento questo mese.</p>'}</div>
-    <h2 class="gh">Da inizio anno</h2>
-    <div class="list">${riga('Entrate',fmt(Ey))}${riga('Uscite',fmt(Uy))}${riga('Saldo',meno(Ey-Uy),Ey-Uy>=0?'':'neg')}${riga('Risparmio, investimenti compresi',nf1.format(sr*100)+'%')}</div>
   </div></div>`;
 }
 
@@ -912,7 +1010,7 @@ async function vAndamento(){
     const mx = Math.max(1,...L.map(o=>Math.abs(o.d)));
     body = `<p class="note" style="margin:0 0 16px">${mese(m)}: a destra le categorie oltre il budget, a sinistra quelle con margine.</p><div class="list">${L.map(o=>{
       const w = Math.abs(o.d)/mx*42, over = o.d>0;
-      return `<div class="diff"><span class="row-title">${esc(nome(o.c))}</span><span class="diff-track"><i style="${over?'left:50%':'right:50%'};width:${w}%;background:${over?'var(--bar-over)':'var(--bar)'}"></i><span style="${over?`left:calc(50% + ${w}% + 8px)`:`right:calc(50% + ${w}% + 8px)`}">${over?'':'−'}${eur0(Math.abs(o.d))}</span></span></div>`;
+      return `<div class="diff"><span class="row-title">${esc(nome(o.c))}</span><span class="diff-track"><i style="${over?'left:50%':'right:50%'};width:${w}%;background:${over?'var(--bar-over)':'var(--bar-ok)'}"></i><span style="${over?`left:calc(50% + ${w}% + 8px)`:`right:calc(50% + ${w}% + 8px)`}">${over?'':'−'}${eur0(Math.abs(o.d))}</span></span></div>`;
     }).join('')}</div>`;
   }
   return `<h1 class="lt">Andamento</h1>${seg([['mesi','Mesi'],['categorie','Categorie'],['budget','Contro budget']], S.chart, 'setChart')}${body}`;
@@ -1358,6 +1456,11 @@ async function vImpost(){
     <button class="row link" onclick="refreshData()">Aggiorna i dati adesso</button>
     <button class="row link" onclick="mostraSetup()">Collega un altro file</button>
   </div>
+  <h2 class="gh">Tastiera</h2>
+  <div class="list plain">
+    <button class="row link" onclick="mostraScorciatoie()">Scorciatoie da tastiera</button>
+    <button class="row link" onclick="mostraTastierino();toast('Il tastierino sullo schermo è di nuovo attivo')">Mostra sempre il tastierino sullo schermo</button>
+  </div>
   <h2 class="gh">Consulente</h2>
   <div class="list plain">
     <label class="row"><span>Indirizzo del ponte</span><input class="field" type="url" inputmode="url" placeholder="https://…workers.dev" value="${esc(urlConsulente())}" onchange="salvaUrlConsulente(this.value)" aria-label="Indirizzo del ponte Cloudflare"></label>
@@ -1375,14 +1478,49 @@ function setTheme(v){ try{localStorage.setItem('budgetTheme',v)}catch(e){} apply
 // ── FOGLI: DETTAGLIO MOVIMENTO E NUOVA VOCE ───────────────────
 function openSheet(html){ $('#sheet').innerHTML = html; const w=$('#sheetWrap'); w.classList.add('open'); w.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
 function closeSheet(){ const w=$('#sheetWrap'); w.classList.remove('open'); w.setAttribute('aria-hidden','true'); document.body.style.overflow=''; A=null; }
+// ── TASTIERA (anche quella esterna dei tablet) ────────────────
+const inCampo = () => { const t = document.activeElement; return !!t && (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable); };
+function segnaTastiera(){ if (!document.body.classList.contains('tastiera')) { document.body.classList.add('tastiera'); try { localStorage.setItem('budgetTastiera','1'); } catch(e) {} } }
+function mostraTastierino(){ document.body.classList.remove('tastiera'); try { localStorage.removeItem('budgetTastiera'); } catch(e) {} }
+try { if (localStorage.getItem('budgetTastiera') || matchMedia('(hover:hover) and (pointer:fine)').matches) document.body.classList.add('tastiera'); } catch(e) {}
+function frecciaMese(d){
+  if (S.view==='movimenti' && S.f.per!=='tutto') shiftM('movM', d, S.f.per==='anno');
+  else if (S.view==='budget' && S.bud==='mese') { const m = S.budM.m + d; if (m>=0 && m<=11) shiftM('budM', d); }
+  else if (S.view==='coab') shiftM('coabM', d);
+}
+async function cercaMov(){ if (S.view!=='movimenti') await go('movimenti'); const i = $('#content .search input'); if (i) i.focus(); }
+const SCORCIATOIE = [['N','Nuova voce'],['1','Riepilogo'],['2','Movimenti'],['3','Budget'],['4','Analisi'],['C','Consulente'],['/','Cerca nei movimenti'],['← →','Mese precedente e successivo'],['R','Aggiorna i dati'],['Esc','Chiudi o torna indietro'],['?','Questo elenco']];
+const SCORCIATOIE_VOCE = [['0–9 ,','Importo'],['U  E','Uscita o entrata'],['Tab','Passa da un pulsante all\'altro'],['Invio','Salva la voce'],['Esc','Annulla']];
+function mostraScorciatoie(){
+  const r = L => `<div class="list plain">${L.map(([k,l])=>`<div class="row"><span class="row-main">${l}</span><kbd>${k}</kbd></div>`).join('')}</div>`;
+  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>Scorciatoie da tastiera</h2><span></span></div>
+  <div class="sheet-scroll">${r(SCORCIATOIE)}<p class="sublabel">Nella nuova voce</p>${r(SCORCIATOIE_VOCE)}<p class="note">Valgono con una tastiera esterna o sul computer, quando non stai scrivendo in un campo.</p></div>`);
+}
 document.addEventListener('keydown', e => {
-  if (!$('#sheetWrap').classList.contains('open')) return;
-  if (e.key==='Escape') return closeSheet();
-  const tag = document.activeElement ? document.activeElement.tagName : '';
-  if (!A || A.cerca || tag==='INPUT' || tag==='SELECT' || tag==='TEXTAREA') return;
-  if (e.key>='0' && e.key<='9') { kp(e.key); e.preventDefault(); }
-  else if (e.key===','||e.key==='.') { kp(','); e.preventDefault(); }
-  else if (e.key==='Backspace'||e.key==='Delete') { kp('del'); e.preventDefault(); }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const foglio = $('#sheetWrap').classList.contains('open');
+  if (e.key==='Escape') {
+    if (foglio) closeSheet(); else if (inCampo()) document.activeElement.blur(); else if (VIEWS[S.view].parent) go(VIEWS[S.view].parent);
+    return;
+  }
+  if (foglio) {
+    if (!A || A.cerca) return;
+    const att = document.activeElement;
+    if (e.key==='Enter' && !e.shiftKey && (inCampo() ? att.classList.contains('input') : !(att && att.closest('#sheet button')))) { e.preventDefault(); salvaTransazione(); return; }
+    if (inCampo()) return;
+    if (/^[0-9]$/.test(e.key)) { segnaTastiera(); kp(e.key); e.preventDefault(); }
+    else if (e.key===','||e.key==='.') { segnaTastiera(); kp(','); e.preventDefault(); }
+    else if (e.key==='Backspace'||e.key==='Delete') { kp('del'); e.preventDefault(); }
+    else if (e.key==='u'||e.key==='U') setSenso('USCITA');
+    else if (e.key==='e'||e.key==='E') setSenso('ENTRATA');
+    return;
+  }
+  if ($('#app').style.display==='none' || inCampo()) return;
+  const azioni = { n:()=>openAdd(), '1':()=>go('oggi'), '2':()=>go('movimenti'), '3':()=>go('budget'), '4':()=>go('analisi'),
+    c:()=>go('consulente','push').then(()=>{ const t=$('#domanda'); t&&t.focus(); }), r:()=>refreshData(), '?':()=>mostraScorciatoie(), '/':()=>cercaMov(),
+    ArrowLeft:()=>frecciaMese(-1), ArrowRight:()=>frecciaMese(1) };
+  const f = azioni[e.key.length===1 ? e.key.toLowerCase() : e.key];
+  if (f) { e.preventDefault(); segnaTastiera(); f(); }
 });
 const trovaRiga = idx => (cachedRows||[]).find(r=>r._index===idx);
 
@@ -1423,6 +1561,7 @@ function drawAdd(){
   if (!A) return;
   const rows = cachedRows || [];
   const sc = $('#sheet .sheet-scroll'), top = sc ? sc.scrollTop : 0;
+  const fuoco = document.activeElement && document.activeElement.closest('#sheet') ? document.activeElement.dataset.f : null;
   const stesso = rows.filter(r=>String(r.senso||'').toUpperCase()===A.s);
   const freq = {}; stesso.forEach(r=>{ if(r.tipologia) freq[r.tipologia]=(freq[r.tipologia]||0)+1; });
   const cats = [...new Set([...CATEGORIE, ...rows.map(r=>r.tipologia).filter(Boolean)])].sort((a,b)=>(freq[b]||0)-(freq[a]||0)||a.localeCompare(b));
@@ -1442,15 +1581,16 @@ function drawAdd(){
       <div class="list" id="cercaList">${res.map(r=>`<button class="row" onclick="fillFrom(${r._index})"><span class="ic">${icoCat(r.tipologia)}</span><span class="row-main"><span class="row-title">${esc(frase(r.descrizione)||nome(r.tipologia))}</span><span class="row-sub">${esc(nome(r.tipologia))}, ${giornoBreve(r.data)}</span></span><span class="amt ${r.valore>0?'pos':''}">${fmt(Math.abs(r.valore))}</span></button>`).join('')||'<p class="empty">Nessun risultato.</p>'}</div>`;
   } else {
     corpo = `${seg([['USCITA','Uscita'],['ENTRATA','Entrata']], A.s, 'setSenso')}
-    <p class="amount ${A.amt?'':'ph'} ${A.s==='ENTRATA'&&A.amt?'pos':''}" aria-live="polite">${mostra} €</p>
-    ${A.edit!=null?'':`<p class="sublabel">Ripeti una voce recente</p><div class="chips">${recenti.map(r=>`<button class="recent" onclick="fillFrom(${r._index})"><span>${esc(frase(r.descrizione))}</span><small>${esc(nome(r.tipologia))}, ${fmt(Math.abs(r.valore))}</small></button>`).join('')}<button class="recent more" onclick="A.cerca=true;A.q='';drawAdd();setTimeout(()=>{const e=document.getElementById('cercaIn');e&&e.focus()},50)">${ico('Search')}Cerca</button></div>`}
+    <p class="amount ${A.amt?'':'ph'} ${A.s==='ENTRATA'&&A.amt?'pos':''}" aria-live="polite" onclick="mostraTastierino()" title="Tocca per il tastierino">${mostra} €</p>
+    <p class="hint-tastiera">Scrivi l'importo con la tastiera, Invio per salvare. Tocca l'importo per il tastierino.</p>
+    ${A.edit!=null?'':`<p class="sublabel">Ripeti una voce recente</p><div class="chips">${recenti.map(r=>`<button class="recent" data-f="rec-${r._index}" onclick="fillFrom(${r._index})"><span>${esc(frase(r.descrizione))}</span><small>${esc(nome(r.tipologia))}, ${fmt(Math.abs(r.valore))}</small></button>`).join('')}<button class="recent more" data-f="cerca" onclick="A.cerca=true;A.q='';drawAdd();setTimeout(()=>{const e=document.getElementById('cercaIn');e&&e.focus()},50)">${ico('Search')}Cerca</button></div>`}
     <p class="sublabel">Categoria</p>
-    <div class="cats">${shown.map(c=>`<button class="cat ${A.cat===c?'on':''}" onclick='setCat(${JSON.stringify(c)})' aria-pressed="${A.cat===c}"><span class="ic">${icoCat(c)}</span>${esc(nome(c))}</button>`).join('')}
-      <button class="cat" onclick="A.all=!A.all;drawAdd()"><span class="ic">${ico(A.all?'ChevronLeft':'Plus')}</span>${A.all?'Meno':'Altre'}</button></div>
+    <div class="cats">${shown.map(c=>`<button class="cat ${A.cat===c?'on':''}" data-f="cat-${esc(c)}" onclick='setCat(${JSON.stringify(c)},event)' aria-pressed="${A.cat===c}"><span class="ic">${icoCat(c)}</span>${esc(nome(c))}</button>`).join('')}
+      <button class="cat" data-f="altre" onclick="A.all=!A.all;drawAdd()"><span class="ic">${ico(A.all?'ChevronLeft':'Plus')}</span>${A.all?'Meno':'Altre'}</button></div>
     <p class="sublabel">Descrizione</p>
     <input class="input" placeholder="Facoltativa" value="${esc(A.desc)}" oninput="A.desc=this.value" aria-label="Descrizione" autocomplete="off">
     <div class="list plain" style="margin-top:16px">
-      <button class="row" onclick="A.open=!A.open;drawAdd()" aria-expanded="${A.open}"><span class="row-main"><span class="row-title">Dettagli</span><span class="row-sub">${dLab}, ${frase(A.mezzo).toLowerCase()}, ${frase(A.cad).toLowerCase()}</span></span>${ico(A.open?'ChevronLeft':'ChevronRight','chev')}</button>
+      <button class="row" data-f="dettagli" onclick="A.open=!A.open;drawAdd()" aria-expanded="${A.open}"><span class="row-main"><span class="row-title">Dettagli</span><span class="row-sub">${dLab}, ${frase(A.mezzo).toLowerCase()}, ${frase(A.cad).toLowerCase()}</span></span>${ico(A.open?'ChevronLeft':'ChevronRight','chev')}</button>
       ${A.open?`
       <label class="row"><span>Data</span><input class="field" type="date" value="${A.date}" onchange="A.date=this.value;drawAdd()"></label>
       <label class="row"><span>Cadenza</span><select class="field" onchange="A.cad=this.value;drawAdd()">${CADENZE.map(x=>`<option value="${x}" ${A.cad===x?'selected':''}>${frase(x)}</option>`).join('')}</select></label>
@@ -1467,16 +1607,18 @@ function drawAdd(){
     <button class="btn" ${ok?'':'disabled'} onclick="salvaTransazione()">${A.busy?'Salvataggio…':A.edit!=null?'Salva modifiche':A.s==='ENTRATA'?'Salva entrata':'Salva uscita'}</button>
   </div>`}`;
   const sc2 = $('#sheet .sheet-scroll'); if (sc2 && !A.cerca) sc2.scrollTop = top;
+  if (fuoco) { const el = $('#sheet [data-f="'+CSS.escape(fuoco)+'"]'); if (el) el.focus(); }
 }
 function drawCerca(){ const keep = A.q; drawAdd(); const e=document.getElementById('cercaIn'); if(e){ e.focus(); e.setSelectionRange(keep.length,keep.length); } }
 function setSenso(s){ if (A.s!==s) { A.s=s; A.cat=''; A.auto=false; } drawAdd(); }
-function setCat(c){
+function setCat(c, ev){
   A.cat = c; A.auto = false;
   if (A.edit==null) {
     const last = (cachedRows||[]).filter(r=>r.tipologia===c).sort((a,b)=>String(b.data).localeCompare(String(a.data)))[0];
     if (last) { A.cad = last.cadenza||A.cad; A.met = last.metodo||A.met; A.mezzo = last.mezzo||A.mezzo; A.auto = true; }
   }
   drawAdd();
+  if (ev && ev.detail===0) { const d = $('#sheet .input'); if (d) d.focus(); } // scelta da tastiera: si passa alla descrizione
 }
 function fillFrom(idx){
   const r = trovaRiga(idx); if (!r) return;
