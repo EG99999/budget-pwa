@@ -219,6 +219,14 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .tx-amount{text-align:center;font-size:32px;font-weight:600;letter-spacing:-.02em;margin-top:var(--s1);font-variant-numeric:tabular-nums}
 .tx-desc{text-align:center;margin-bottom:var(--s2);color:var(--text-2)}
 
+/* pannello categoria */
+.stat3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--sep);border-radius:16px;overflow:hidden;margin-bottom:var(--s1)}
+.stat3>div{background:var(--card);padding:var(--s1) var(--s2)}
+.stat3 small{display:block;color:var(--text-2);font-size:13px}
+.stat3 b{font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mediana-riga{display:flex;align-items:center;gap:var(--s1);padding:var(--s1) var(--s2);font-size:13px;color:var(--accent-text)}
+.mediana-riga::before,.mediana-riga::after{content:"";flex:1;border-top:1px dashed currentColor}
+
 /* tastiera esterna */
 kbd{font:inherit;font-size:13px;min-width:32px;height:32px;padding:0 var(--s1);border-radius:8px;background:var(--fill);box-shadow:inset 0 -1px 0 var(--sep);display:inline-grid;place-items:center;color:var(--text);white-space:nowrap}
 .amount{cursor:pointer}
@@ -716,13 +724,14 @@ function tonoBudget(p, tick, entrata){
   if (p>1) return 'over';
   return tick==null || p<=tick+0.001 ? 'ok' : 'warn';
 }
-function budRow(c, speso, budget, tick, entrata){
+function budRow(c, speso, budget, tick, entrata, ctx){
   const p = budget>0 ? speso/budget : (speso>0 ? 2 : 0);
   const cls = tonoBudget(p, tick, entrata);
   const right = entrata
     ? (speso>=budget ? `<span class="pos">raggiunto</span>` : `<span class="muted">mancano ${eur0(budget-speso)}</span>`)
     : (speso>budget ? `<span class="neg">${eur0(speso-budget)} oltre</span>` : `<span class="${cls==='ok'?'pos':'warn'}">restano ${eur0(budget-speso)}</span>`);
-  return `<div class="row"><span class="ic">${icoCat(c)}</span><span class="row-main"><span class="row-line"><span class="row-title">${esc(nome(c))}</span>${right}</span><span class="bar ${cls}"><i style="width:${Math.min(p,1)*100}%"></i>${tick!=null?`<b class="tick" style="left:${tick*100}%"></b>`:''}</span><span class="row-sub num">${fmt(speso)} di ${budget?eur0(budget):'0 €, non previsto'}</span></span></div>`;
+  const apri = ctx ? `<button class="row" onclick="apriCategoria(${esc(JSON.stringify(c))},'${ctx.per}',${ctx.y},${ctx.m})">` : '<div class="row">';
+  return `${apri}<span class="ic">${icoCat(c)}</span><span class="row-main"><span class="row-line"><span class="row-title">${esc(nome(c))}</span>${right}</span><span class="bar ${cls}"><i style="width:${Math.min(p,1)*100}%"></i>${tick!=null?`<b class="tick" style="left:${tick*100}%"></b>`:''}</span><span class="row-sub num">${fmt(speso)} di ${budget?eur0(budget):'0 €, non previsto'}</span></span>${ctx?'</button>':'</div>'}`;
 }
 
 // ── RIEPILOGO: anno, rimedi, categorie, mesi, mese corrente ───
@@ -803,7 +812,7 @@ async function vOggi(){
   const top = Object.entries(catY).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]).slice(0,6), mx = top.length ? top[0][1] : 1;
   const dove = `<h2 class="gh">Dove spendi di più <button class="link" onclick="S.chart='categorie';S.catPer='anno';go('andamento','push')">Tutte</button></h2>
     <div class="list">${top.map(([c,v])=>{ const a = budA[c]||0, cls = a>0 ? (v>a ? 'over' : v>a*fa ? 'warn' : 'ok') : '';
-      return `<button class="hbar" onclick='filtraCat(${JSON.stringify(c)},false)'><span>${esc(nome(c))}</span><span class="num muted">${eur0(v)}${a?` di ${eur0(a)}`:''}</span><span class="bar ${cls}"><i style="width:${v/mx*100}%"></i></span></button>`; }).join('') || '<p class="empty">Nessuna uscita quest\'anno.</p>'}</div>
+      return `<button class="hbar" onclick="apriCategoria(${esc(JSON.stringify(c))},'anno',${y})"><span>${esc(nome(c))}</span><span class="num muted">${eur0(v)}${a?` di ${eur0(a)}`:''}</span><span class="bar ${cls}"><i style="width:${v/mx*100}%"></i></span></button>`; }).join('') || '<p class="empty">Nessuna uscita quest\'anno.</p>'}</div>
     <p class="note">Verde: in linea con il budget dell'anno. Arancio: sopra il ritmo previsto. Rosso: budget dell'anno superato.</p>`;
 
   // mese per mese: dove sono andati più soldi
@@ -830,7 +839,7 @@ async function vOggi(){
     const w = bud.cats.filter(x=>x.g!=='Entrate').map(x=>({c:x.cat, s:Math.abs(act[x.cat]||0), b:x.m[m]}))
       .filter(o=>o.s>0 && tonoBudget(o.b>0?o.s/o.b:2, f, false)!=='ok').sort((a,b)=>(b.s-b.b)-(a.s-a.b)).slice(0,6);
     watch = `<h2 class="gh">Da tenere d'occhio</h2>` + (w.length
-      ? `<div class="list">${w.map(o=>budRow(o.c,o.s,o.b,f)).join('')}</div><p class="note">La tacca indica il giorno di oggi: se la barra la supera, stai spendendo più in fretta del previsto.</p>`
+      ? `<div class="list">${w.map(o=>budRow(o.c,o.s,o.b,f,false,{per:'mese',y,m})).join('')}</div><p class="note">La tacca indica il giorno di oggi: se la barra la supera, stai spendendo più in fretta del previsto.</p>`
       : `<div class="card muted">Tutte le categorie sono nei limiti.</div>`);
   }
   const ultimi = [...L].sort((a,b)=>String(b.data).localeCompare(String(a.data))||b._index-a._index).slice(0,5);
@@ -928,7 +937,7 @@ async function vBudget(){
   const gruppi = [...new Set(bud.cats.map(x=>x.g))].map(g => {
     const cs = bud.cats.filter(x=>x.g===g && (bb(x)>0 || val(x)>0));
     if (!cs.length) return '';
-    return `<section class="blocco"><h2 class="gh">${esc(g)}</h2><div class="list">${cs.map(x=>budRow(x.cat,val(x),bb(x),g==='Entrate'?null:tick,g==='Entrate')).join('')}</div></section>`;
+    return `<section class="blocco"><h2 class="gh">${esc(g)}</h2><div class="list">${cs.map(x=>budRow(x.cat,val(x),bb(x),g==='Entrate'?null:tick,g==='Entrate',{per:meseV?'mese':'anno',y,m})).join('')}</div></section>`;
   }).join('');
   const idx = meseV ? m+1 : 13, tv = k => bud.tot[k] ? parseFloat(bud.tot[k][idx])||0 : null;
   const prev = [['Entrate previste',tv('TOT ENTRATE')],['Uscite previste',tv('TOT USCITE')],['Saldo previsto',tv('SALDO')]].filter(x=>x[1]!=null);
@@ -995,14 +1004,14 @@ async function vAndamento(){
       <div class="row"><span class="row-main"><span class="row-line"><span>Entrate</span><span class="num">${fmt(E[i]||0)}</span></span></span></div>
       <div class="row"><span class="row-main"><span class="row-line"><span>Saldo</span><span class="num ${saldo<0?'neg':''}">${meno(saldo)}</span></span></span></div>
     </div>
-    ${top.length?`<h2 class="gh">Categorie più alte</h2><div class="list">${top.map(([c,v])=>`<div class="hbar"><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></div>`).join('')}</div>`:''}</div></div>`;
+    ${top.length?`<h2 class="gh">Categorie più alte</h2><div class="list">${top.map(([c,v])=>`<button class="hbar" onclick="apriCategoria(${esc(JSON.stringify(c))},'mese',${y},${i})"><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></button>`).join('')}</div>`:''}</div></div>`;
   } else if (S.chart==='categorie') {
     const meseV = S.catPer==='mese';
     const src = rows.filter(r=>r.valore<0 && (meseV ? sameYM(r.data,y,t.getMonth()) : String(r.data||'').startsWith(y)));
     const L = Object.entries(perCat(src)).map(([c,v])=>[c,-v]).sort((a,b)=>b[1]-a[1]);
     const tot = L.reduce((s,x)=>s+x[1],0), mx = L.length?L[0][1]:1;
     body = `<div class="chips">${[['mese',mese(t.getMonth())],['anno','Anno '+y]].map(([v,l])=>`<button class="chip ${S.catPer===v?'on':''}" onclick="S.catPer='${v}';render()">${l}</button>`).join('')}</div>
-    <div class="list">${L.length?L.map(([c,v])=>`<button class="hbar" onclick='filtraCat(${JSON.stringify(c)},${meseV})'><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}, ${pct(v/tot)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></button>`).join(''):'<p class="empty">Nessuna uscita nel periodo.</p>'}</div>
+    <div class="list">${L.length?L.map(([c,v])=>`<button class="hbar" onclick="apriCategoria(${esc(JSON.stringify(c))},'${meseV?'mese':'anno'}',${y},${t.getMonth()})"><span>${esc(nome(c))}</span><span class="num muted">${fmt(v)}, ${pct(v/tot)}</span><span class="bar"><i style="width:${v/mx*100}%"></i></span></button>`).join(''):'<p class="empty">Nessuna uscita nel periodo.</p>'}</div>
     <p class="note">Tocca una categoria per vederne i movimenti.</p>`;
   } else {
     const bud = await getBudget(), m = t.getMonth(), act = perCat(rows.filter(r=>sameYM(r.data,y,m)));
@@ -1016,7 +1025,6 @@ async function vAndamento(){
   return `<h1 class="lt">Andamento</h1>${seg([['mesi','Mesi'],['categorie','Categorie'],['budget','Contro budget']], S.chart, 'setChart')}${body}`;
 }
 function setChart(v){ S.chart=v; render(); }
-function filtraCat(c, meseV){ const t=new Date(); S.f={q:'',per:meseV?'mese':'anno',senso:'',cat:c,sort:'data-desc',limit:300}; S.movM={y:t.getFullYear(),m:t.getMonth()}; go('movimenti'); }
 
 // ── SALUTE FINANZIARIA (foglio ANALISI CFO) ───────────────────
 async function getCfo(){
@@ -1524,11 +1532,11 @@ document.addEventListener('keydown', e => {
 });
 const trovaRiga = idx => (cachedRows||[]).find(r=>r._index===idx);
 
-function openTx(idx){
+function openTx(idx, daCategoria){
   const r = trovaRiga(idx); if (!r) return;
   const e = r.valore>0;
   const riga = (a,b) => `<div class="row"><span class="row-main"><span class="row-line"><span>${a}</span><span class="muted">${esc(b)}</span></span></span></div>`;
-  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>${e?'Entrata':'Uscita'}</h2><span></span></div>
+  openSheet(`<div class="grab"></div><div class="sheet-head">${daCategoria?`<button class="link" style="display:flex;align-items:center" onclick="drawCategoria()">${ico('ChevronLeft')}${esc(nome(CS.cat))}</button>`:`<button class="link" onclick="closeSheet()">Chiudi</button>`}<h2>${e?'Entrata':'Uscita'}</h2><span></span></div>
   <div class="sheet-scroll">
     <p class="tx-amount ${e?'pos':''}">${fmt(Math.abs(r.valore))}</p>
     <p class="tx-desc">${esc(frase(r.descrizione)||'Senza descrizione')}</p>
@@ -1536,6 +1544,37 @@ function openTx(idx){
     <div style="margin-top:24px"><button class="btn" onclick="openAdd(${r._index},'modifica')">Modifica</button><button class="btn soft" onclick="openAdd(${r._index},'copia')">Usa come nuova voce</button><button class="btn danger" id="delBtn" onclick="eliminaTransazione(${r._index})">Elimina</button></div>
   </div>`);
 }
+// pannello di una categoria: tutte le spese del periodo, con la mediana
+let CS = null; // {cat, per:'mese'|'anno'|'tutto', y, m, ord:'data'|'importo'}
+const mediana = a => { if (!a.length) return 0; const s = [...a].sort((x,y)=>x-y), k = s.length>>1; return s.length%2 ? s[k] : (s[k-1]+s[k])/2; };
+function apriCategoria(cat, per, y, m){ const t = new Date(); CS = {cat, per, y:y??t.getFullYear(), m:m??t.getMonth(), ord:'data'}; openSheet(''); drawCategoria(); }
+function setPerCat(p){ CS.per = p; drawCategoria(); }
+function drawCategoria(){
+  if (!CS) return;
+  const {cat, per, y, m, ord} = CS;
+  const L = (cachedRows||[]).filter(r => r.tipologia===cat && r.data && (per==='tutto' || (per==='anno' ? String(r.data).startsWith(String(y)) : sameYM(r.data,y,m))));
+  const val = r => Math.abs(r.valore), vals = L.map(val), tot = vals.reduce((s,v)=>s+v,0), med = mediana(vals);
+  const S2 = ord==='importo' ? [...L].sort((a,b)=>val(b)-val(a)) : [...L].sort((a,b)=>String(b.data).localeCompare(String(a.data))||b._index-a._index);
+  const V = S2.slice(0, 300);
+  let righe = '', segnata = false;
+  for (const r of V) {
+    if (ord==='importo' && !segnata && val(r) < med) { righe += `<div class="mediana-riga">mediana ${fmt(med)}</div>`; segnata = true; }
+    righe += `<button class="row" onclick="openTx(${r._index},true)"><span class="row-main"><span class="row-title">${esc(frase(r.descrizione)||nome(r.tipologia))}</span><span class="row-sub">${giornoBreve(r.data)}${per!=='anno'&&per!=='mese'?' '+String(r.data).slice(0,4):''}</span></span><span class="amt ${r.valore>0?'pos':''}">${fmt(val(r))}</span></button>`;
+  }
+  const etichetta = per==='mese' ? `${mese(m)} ${y}` : per==='anno' ? String(y) : 'Tutto';
+  $('#sheet').innerHTML = `<div class="grab"></div>
+  <div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>${esc(nome(cat))}</h2><span></span></div>
+  <div class="sheet-scroll">
+    ${seg([['mese',mese(m)],['anno',String(y)],['tutto','Tutto']], per, 'setPerCat')}
+    <div class="stat3"><div><small>Totale</small><b>${fmt(tot)}</b></div><div><small>${L.length===1?'Spesa':'Spese'}</small><b>${L.length}</b></div><div><small>Mediana</small><b>${fmt(med)}</b></div></div>
+    <p class="note" style="margin:0 8px 16px">La mediana è l'importo nel mezzo: metà delle spese costa meno, metà di più.${L.length>1?` La media è ${fmt(tot/L.length)}.`:''}</p>
+    ${L.length?`<div class="chips">${[['data','Più recenti'],['importo','Per importo']].map(([v,l])=>`<button class="chip ${ord===v?'on':''}" onclick="CS.ord='${v}';drawCategoria()">${l}</button>`).join('')}</div>
+    <div class="list">${righe}</div>${L.length>V.length?`<p class="note">Mostrate le prime ${V.length} su ${L.length}.</p>`:''}`
+    : `<div class="list"><p class="empty">Nessuna spesa di ${esc(nome(cat).toLowerCase())} in ${etichetta.toLowerCase()}.</p></div>`}
+    <button class="btn soft" style="margin-top:16px" onclick="vediCategoriaInMovimenti()">Apri in Movimenti</button>
+  </div>`;
+}
+function vediCategoriaInMovimenti(){ const {cat, per, y, m} = CS; closeSheet(); S.f = {q:'', per, senso:'', cat, sort:'data-desc', limit:300}; S.movM = {y, m}; go('movimenti'); }
 async function eliminaTransazione(rowIndex) {
   const b = $('#delBtn');
   if (!b.dataset.sure) { b.dataset.sure='1'; b.textContent='Tocca di nuovo per eliminare'; setTimeout(()=>{ if(b.isConnected){ delete b.dataset.sure; b.textContent='Elimina'; } },3000); return; }
