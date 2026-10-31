@@ -53,8 +53,11 @@ export default {
     const messages = (Array.isArray(body.messages) ? body.messages : [])
       .filter(m => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
       .slice(-MAX_MESSAGGI)
-      .map(m => ({ role: m.role, content: m.content.slice(0, 8000) }));
+      .map(m => ({ role: m.role, content: m.content.slice(0, 8000) }))
+      // unisce i turni consecutivi dello stesso ruolo (es. domanda rimasta senza risposta) e parte sempre dall'utente
+      .reduce((a, m) => { const u = a[a.length - 1]; if (u && u.role === m.role) u.content += "\n\n" + m.content; else if (a.length || m.role === "user") a.push(m); return a; }, []);
     if (!messages.length || messages[messages.length - 1].role !== "user") return risposta("Manca la domanda", 400, h);
+    console.log(`domanda: ${messages.length} messaggi, dati ${dati.length} caratteri`);
 
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
     const stream = client.beta.messages.stream({
@@ -79,9 +82,11 @@ export default {
           if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") await w.write(enc.encode(ev.delta.text));
         }
         const fin = await stream.finalMessage();
+        console.log(`fine: ${fin.stop_reason}, token in ${fin.usage.input_tokens} cache ${fin.usage.cache_read_input_tokens || 0}/${fin.usage.cache_creation_input_tokens || 0}, out ${fin.usage.output_tokens}`);
         if (fin.stop_reason === "refusal") await w.write(enc.encode("\n\nNon posso rispondere a questa domanda."));
         else if (fin.stop_reason === "max_tokens") await w.write(enc.encode("\n\nLa risposta è stata interrotta perché troppo lunga."));
       } catch (e) {
+        console.error("errore:", e && e.name, e && e.status, e && e.message);
         let msg = "Errore del consulente.";
         if (e instanceof Anthropic.AuthenticationError) msg = "Chiave API non valida: controlla il segreto ANTHROPIC_API_KEY su Cloudflare.";
         else if (e instanceof Anthropic.RateLimitError) msg = "Troppe richieste o tetto di spesa raggiunto: riprova più tardi.";

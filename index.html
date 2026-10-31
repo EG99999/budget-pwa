@@ -234,7 +234,8 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .composer .send{width:40px;height:40px;border-radius:20px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
 .composer .send:disabled{background:var(--fill-2);color:var(--text-3)}
 .composer .send svg.i{width:24px;height:24px}
-@media (min-width:960px){.composer{left:264px;bottom:0;padding:var(--s2) var(--s6)}}
+body:has(> .composer) .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
+@media (min-width:960px){.composer{left:264px;bottom:0;padding:var(--s2) var(--s6)} body:has(> .composer) .toast{bottom:96px}}
 
 .toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:60;background:rgba(44,44,46,.96);color:#fff;font-size:15px;padding:var(--s1) var(--s2);border-radius:24px;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -574,7 +575,7 @@ const VIEWS = {
   casa:{t:'Casa',r:vCasa,parent:'analisi'},
   abbonamenti:{t:'Abbonamenti',r:vAbbonamenti,parent:'analisi'},
   coab:{t:'Coabitazione',r:vCoab,parent:'analisi'},
-  consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat},
+  consulente:{t:'Consulente',r:vConsulente,parent:'analisi',after:fineChat,act:()=>CHAT.length||_attiva?`<button class="icon-btn" aria-label="Nuova conversazione" onclick="cancellaChat()">${ico('SquarePen')}</button>`:''},
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi'}
 };
 function go(v, anim){ S.view=v; render(anim||'fade', true); window.scrollTo(0,0); }
@@ -1187,8 +1188,10 @@ const urlConsulente = () => { try { return localStorage.getItem('consulenteUrl')
 function salvaUrlConsulente(v){ try { localStorage.setItem('consulenteUrl', v.trim()); } catch(e) {} toast(v.trim() ? 'Indirizzo salvato' : 'Indirizzo tolto'); }
 let CHAT = []; try { CHAT = JSON.parse(localStorage.getItem('consulenteChat')||'[]'); } catch(e) {}
 const salvaChat = () => { try { localStorage.setItem('consulenteChat', JSON.stringify(CHAT.slice(-40))); } catch(e) {} };
-function cancellaChat(){ CHAT = []; salvaChat(); toast('Conversazione cancellata'); if (S.view==='consulente') render(); }
-let _inCorso = false;
+function cancellaChat(){ if (_attiva) { _attiva.annullata = true; fermaRisposta(); } CHAT = []; _errore = ''; salvaChat(); toast('Conversazione cancellata'); if (S.view==='consulente') render(); }
+let _attiva = null;   // risposta in arrivo: {testo, ctrl, fermata}; sopravvive al cambio di pagina
+let _errore = '';     // ultimo errore, mostrato fino alla prossima domanda
+const ATTESA = '<span class="attesa"><span class="spinner"></span>Sto guardando i tuoi dati</span>';
 
 function testoRicco(t){
   const righe = esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').split('\n');
@@ -1222,49 +1225,59 @@ function vConsulente(){
     <p class="note" style="margin:8px 0 16px">Prima va collegato il ponte Cloudflare che custodisce la chiave API. Quando è pronto, incolla il suo indirizzo nelle Impostazioni.</p>
     <button class="btn soft" onclick="go('impostazioni','push')">Apri le Impostazioni</button></section>`;
   const prop = ['Dove posso risparmiare questo mese?', `Com'è andato ${mese(m).toLowerCase()} rispetto a ${mese((m+11)%12).toLowerCase()}?`, 'Quali spese ricorrenti potrei tagliare?', "Riuscirò a rispettare il budget dell'anno?"];
-  const vuota = !CHAT.length;
+  const vuota = !CHAT.length && !_attiva;
   return `<h1 class="lt">Consulente</h1>
   ${vuota?`<p class="muted" style="margin-bottom:16px">Chiedi quello che vuoi sulle tue spese: risponde partendo dai dati del file Excel.</p>
     <div class="list">${prop.map(p=>`<button class="row" onclick='chiedi(${JSON.stringify(p)})'><span class="ic">${ico('MessageCircle')}</span><span class="row-main">${esc(p)}</span>${chev()}</button>`).join('')}</div>
     <p class="note">Le domande e i dati del file, movimenti compresi, vengono inviati a Claude di Anthropic tramite il tuo ponte Cloudflare.</p>`:''}
-  <div class="msgs" id="msgs">${CHAT.map(x=>`<div class="msg ${x.role==='user'?'u':'a'}">${x.role==='user'?esc(x.content):testoRicco(x.content)}</div>`).join('')}</div>
-  <div class="composer"><textarea id="domanda" rows="1" placeholder="Scrivi una domanda" aria-label="Domanda per il consulente" oninput="this.style.height='40px';this.style.height=Math.min(this.scrollHeight,128)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chiedi()}"></textarea><button class="send" id="btnInvia" onclick="chiedi()" aria-label="Invia" ${_inCorso?'disabled':''}>${ico('ArrowUp')}</button></div>`;
+  <div class="msgs" id="msgs">${CHAT.map(x=>`<div class="msg ${x.role==='user'?'u':'a'}">${x.role==='user'?esc(x.content):testoRicco(x.content)}</div>`).join('')}${_attiva?`<div class="msg a" id="risposta">${_attiva.testo?testoRicco(_attiva.testo):ATTESA}</div>`:''}${_errore?`<div class="msg a err">${esc(_errore)}</div>`:''}</div>
+  <div class="composer"><textarea id="domanda" rows="1" placeholder="Scrivi una domanda" aria-label="Domanda per il consulente" oninput="this.style.height='40px';this.style.height=Math.min(this.scrollHeight,128)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chiedi()}"></textarea>${_attiva?`<button class="send" onclick="fermaRisposta()" aria-label="Ferma la risposta">${ico('Square')}</button>`:`<button class="send" onclick="chiedi()" aria-label="Invia">${ico('ArrowUp')}</button>`}</div>`;
 }
 function fineChat(){
   const c = $('#content .composer'); if (c) document.body.appendChild(c); // fuori dal contenuto animato, resta ancorata in basso
-  if ($('#msgs') && CHAT.length) window.scrollTo(0, document.body.scrollHeight);
+  if ($('#msgs') && (CHAT.length || _attiva)) window.scrollTo(0, document.body.scrollHeight);
 }
+function fermaRisposta(){ if (_attiva) { _attiva.fermata = true; _attiva.ctrl.abort(); } }
 async function chiedi(testo){
   const ta = $('#domanda'), q = (testo || (ta ? ta.value : '')).trim();
-  if (!q || _inCorso) return;
-  _inCorso = true;
+  if (!q) return;
+  if (_attiva) { toast('Sto ancora rispondendo: aspetta oppure tocca il pulsante per fermarmi'); return; }
+  const A2 = _attiva = { testo:'', ctrl:new AbortController(), fermata:false };
+  _errore = '';
   CHAT.push({role:'user', content:q}); salvaChat();
-  await render();
-  const box = document.createElement('div'); box.className = 'msg a';
-  box.innerHTML = '<span class="attesa"><span class="spinner"></span>Sto guardando i tuoi dati</span>';
-  $('#msgs').appendChild(box); fineChat();
-  let out = '';
+  if (S.view==='consulente') await render();
+  let timer;
+  const riarma = () => { clearTimeout(timer); timer = setTimeout(() => A2.ctrl.abort(), 120000); }; // 2 minuti senza dati: stop
   try {
+    riarma();
     const dati = await datiConsulente();
     await getToken();
-    const res = await fetch(urlConsulente(), { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ dati, messages: CHAT }) });
-    if (!res.ok) throw new Error(res.status===403 ? 'Il ponte non riconosce il tuo account Microsoft.' : (await res.text()) || ('Errore '+res.status));
+    const res = await fetch(urlConsulente(), { method:'POST', signal:A2.ctrl.signal, headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ dati, messages: CHAT }) });
+    if (!res.ok) throw new Error(res.status===403 ? 'il ponte non riconosce il tuo account Microsoft.' : (await res.text()) || ('errore '+res.status));
     const rd = res.body.getReader(), dec = new TextDecoder();
     for (;;) {
       const {done, value} = await rd.read(); if (done) break;
-      out += dec.decode(value, {stream:true});
-      if (box.isConnected) { box.innerHTML = testoRicco(out); fineChat(); }
+      riarma();
+      A2.testo += dec.decode(value, {stream:true});
+      const box = $('#risposta'); if (box) { box.innerHTML = testoRicco(A2.testo); fineChat(); }
     }
-    if (!out.trim()) throw new Error('Risposta vuota dal consulente.');
-    CHAT.push({role:'assistant', content:out}); salvaChat();
+    if (!A2.testo.trim()) throw new Error('risposta vuota dal consulente.');
+    CHAT.push({role:'assistant', content:A2.testo}); salvaChat();
   } catch(e) {
-    CHAT.pop(); salvaChat();
-    box.classList.add('err'); box.textContent = 'Non sono riuscito a rispondere: ' + (e.message || e);
-    const t2 = $('#domanda'); if (t2) t2.value = q;
+    if (A2.annullata) {}
+    else if (A2.fermata && A2.testo.trim()) { CHAT.push({role:'assistant', content:A2.testo+'\n\n(risposta fermata)'}); salvaChat(); }
+    else {
+      CHAT.pop(); salvaChat();
+      _errore = A2.fermata ? 'Risposta fermata.' : e.name==='AbortError' ? 'Nessuna risposta per 2 minuti: riprova.' : 'Non sono riuscito a rispondere: ' + (e.message || e);
+      if (S.view!=='consulente') toast(_errore);
+    }
   } finally {
-    _inCorso = false;
-    const b = $('#btnInvia'); if (b) b.disabled = false;
-    const t = $('#domanda'); if (t && !t.value) t.focus();
+    clearTimeout(timer);
+    _attiva = null;
+    if (S.view==='consulente') {
+      await render(); fineChat();
+      const t = $('#domanda'); if (t && _errore && !A2.fermata) t.value = q;
+    } else if (!_errore) toast('Il consulente ha risposto: aprilo da Analisi');
   }
 }
 
