@@ -14,6 +14,115 @@ const MAX_MESSAGGI = 30;
 const MAX_DATI = 400000; // caratteri
 const verificati = new Map(); // token -> scadenza, per non chiamare Graph a ogni domanda
 
+// ── Lettura di scontrini ed estratti conto (Sonnet 5.5, risposta JSON secondo uno schema) ──
+const MODELLO_LETTURA = "claude-sonnet-5-5";
+const PREZZO = { in: 2, out: 10 }; // $ per milione di token
+const CAT_PRODOTTI = ["Alimentari", "Bevande", "Casa e pulizia", "Igiene e cura persona", "Farmacia", "Animali", "Abbigliamento", "Elettronica", "Altro"];
+const MEZZI = ["CARTA DI CREDITO", "ADDEBITO CONTO", "BONIFICO", "ACCREDITO CONTO", "CARTA DI DEBITO", "CONTANTI", "ALTRO TRASFERIMENTO"];
+
+const SYSTEM_SCONTRINO = `Leggi la foto di uno scontrino italiano e compila lo schema.
+- data AAAA-MM-GG, ora HH:MM; stringa vuota se non si leggono.
+- totale: l'importo pagato, dopo gli sconti. pagamento: contanti, carta (bancomat, POS, carta di credito, Apple Pay, Google Pay), altro o sconosciuto.
+- Un articolo per ogni riga di prodotto. prezzo: quanto si è pagato per quella riga, quantità compresa e sconti dell'articolo già tolti (lo sconto va anche in sconto). Uno sconto su tutto lo scontrino è un articolo "Sconto" con prezzo negativo, categoria Altro.
+- prodotto: nome chiaro in italiano, senza abbreviazioni, senza marca e senza formato ("SPAGH BAR N5 500G" -> prodotto "Spaghetti n.5", marca "Barilla", contenuto 0.5 kg). Se il prodotto è tra i PRODOTTI GIÀ USATI, riusa esattamente quel nome e quella sottocategoria.
+- sottocategoria: breve e minuscola, riusando quelle già usate (per esempio pasta e riso, pane e sostituti, cereali e colazione, carne, pesce, salumi, formaggi, latte e yogurt, uova, frutta, verdura, surgelati, conserve e sughi, olio e condimenti, farina e zucchero, dolci e snack, caffè e tè, acqua, bibite e succhi, birra e vino, detersivi, carta e casa, igiene personale).
+- quantita e unita: pezzi (pz), oppure kg o l per lo sfuso a peso ("0,850 kg x 2,49 €/kg" -> quantita 0.85, unita kg).
+- contenuto: per i pezzi confezionati, peso o volume netto di un pezzo (500 g -> 0.5 con contenuto_unita kg; 1,5 l -> 1.5 con l). Solo se è scritto sullo scontrino, altrimenti 0 e "".
+- categoria_spesa: la categoria del bilancio più adatta all'intero scontrino.
+- Non inventare righe né prezzi. leggibile = false se non è uno scontrino o non si legge: in quel caso articoli vuoti.`;
+
+const SYSTEM_ESTRATTO = `Leggi un estratto conto (conto corrente o carta) e restituisci tutti i movimenti, nell'ordine del documento.
+- data: data dell'operazione in AAAA-MM-GG (non la valuta). Se nella descrizione di un pagamento con carta c'è la data dell'acquisto, usa quella.
+- importo: negativo per le uscite, positivo per le entrate.
+- descrizione: nome breve e leggibile della controparte o dell'operazione ("Esselunga Milano", "Bonifico da Mario Rossi", "Netflix"), senza codici.
+- originale: il testo del movimento com'è scritto, al massimo 120 caratteri.
+- mezzo: pagamento con carta o POS e prelievo -> CARTA DI DEBITO; addebito diretto (SDD, RID, utenze) -> ADDEBITO CONTO; bonifico in uscita -> BONIFICO; bonifico in entrata e stipendio -> ACCREDITO CONTO; giroconto -> ALTRO TRASFERIMENTO. Sull'estratto di una carta di credito: CARTA DI CREDITO.
+- tipo: normale; saldo_carta per l'addebito mensile della carta di credito sul conto; giroconto per i trasferimenti tra conti della stessa persona; commissione per spese, bolli e interessi della banca.
+- categoria: la categoria del bilancio più adatta, guardando gli ESEMPI delle voci già registrate.
+- Escludi saldi, totali e righe che non sono movimenti. tipo_estratto: conto o carta. conto: banca e conto o carta, se scritti.`;
+
+const oggetto = (props) => ({ type: "object", properties: props, required: Object.keys(props), additionalProperties: false });
+const schemaScontrino = (cats) => oggetto({
+  leggibile: { type: "boolean" },
+  negozio: { type: "string" }, data: { type: "string" }, ora: { type: "string" },
+  totale: { type: "number" },
+  pagamento: { type: "string", enum: ["contanti", "carta", "altro", "sconosciuto"] },
+  categoria_spesa: { type: "string", enum: cats },
+  articoli: { type: "array", items: oggetto({
+    testo: { type: "string" }, prodotto: { type: "string" }, marca: { type: "string" },
+    categoria: { type: "string", enum: CAT_PRODOTTI }, sottocategoria: { type: "string" },
+    quantita: { type: "number" }, unita: { type: "string", enum: ["pz", "kg", "l"] },
+    contenuto: { type: "number" }, contenuto_unita: { type: "string", enum: ["kg", "l", ""] },
+    prezzo: { type: "number" }, sconto: { type: "number" },
+  }) },
+});
+const schemaEstratto = (cats) => oggetto({
+  tipo_estratto: { type: "string", enum: ["conto", "carta"] },
+  conto: { type: "string" },
+  movimenti: { type: "array", items: oggetto({
+    data: { type: "string" }, importo: { type: "number" },
+    descrizione: { type: "string" }, originale: { type: "string" },
+    mezzo: { type: "string", enum: MEZZI },
+    tipo: { type: "string", enum: ["normale", "saldo_carta", "giroconto", "commissione"] },
+    categoria: { type: "string", enum: cats },
+  }) },
+});
+// le categorie del bilancio arrivano dall'app: solo testo breve, senza doppioni
+const pulisciCategorie = (a) => [...new Set((Array.isArray(a) ? a : []).map(c => String(c).slice(0, 60).trim()).filter(Boolean))].slice(0, 80);
+const elenco = (a, max) => (Array.isArray(a) ? a : []).map(x => String(x).slice(0, 200)).slice(0, max).join("\n");
+
+class ErroreLettura extends Error {}
+function messaggioErrore(e) {
+  if (e instanceof ErroreLettura) return e.message;
+  if (e instanceof Anthropic.AuthenticationError) return "Chiave API non valida: controlla il segreto ANTHROPIC_API_KEY su Cloudflare.";
+  if (e instanceof Anthropic.RateLimitError) return "Troppe richieste o tetto di spesa raggiunto: riprova più tardi.";
+  if (e instanceof Anthropic.BadRequestError) return "Richiesta rifiutata dall'API: " + e.message;
+  if (e instanceof Anthropic.APIError) return `Errore dell'API (${e.status}): ${e.message}`;
+  return "Errore del consulente.";
+}
+
+async function leggi(env, system, content, schema, effort, max_tokens) {
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const stream = client.messages.stream({
+    model: MODELLO_LETTURA, max_tokens,
+    output_config: { effort, format: { type: "json_schema", schema } },
+    system, messages: [{ role: "user", content }],
+  });
+  const fin = await stream.finalMessage();
+  const u = fin.usage;
+  const costo = ((u.input_tokens + (u.cache_creation_input_tokens || 0) * 1.25 + (u.cache_read_input_tokens || 0) * 0.1) * PREZZO.in + u.output_tokens * PREZZO.out) / 1e6;
+  console.log(`lettura: ${fin.stop_reason}, token in ${u.input_tokens} out ${u.output_tokens}, ${costo.toFixed(4)} $`);
+  if (fin.stop_reason === "refusal") throw new ErroreLettura("Claude non ha voluto leggere questo file.");
+  if (fin.stop_reason === "max_tokens") throw new ErroreLettura("File troppo lungo: dividilo in parti più piccole.");
+  const testo = fin.content.filter(b => b.type === "text").map(b => b.text).join("");
+  try { return { ...JSON.parse(testo), costo }; } catch { throw new ErroreLettura("Risposta non leggibile, riprova."); }
+}
+
+async function scontrino(body, env) {
+  const tipi = ["image/jpeg", "image/png", "image/webp"];
+  if (!tipi.includes(body.media_type) || typeof body.immagine !== "string" || !body.immagine) throw new ErroreLettura("Manca la foto dello scontrino.");
+  const cats = pulisciCategorie(body.categorie);
+  if (!cats.length) throw new ErroreLettura("Mancano le categorie del bilancio.");
+  const noti = `PRODOTTI GIÀ USATI (prodotto | marca | sottocategoria):\n${elenco(body.prodotti, 400) || "nessuno"}\n\nSOTTOCATEGORIE GIÀ USATE: ${elenco(body.sottocategorie, 100).replace(/\n/g, ", ") || "nessuna"}`;
+  return leggi(env, SYSTEM_SCONTRINO, [
+    { type: "image", source: { type: "base64", media_type: body.media_type, data: body.immagine } },
+    { type: "text", text: noti },
+  ], schemaScontrino(cats), "medium", 16000);
+}
+
+async function estratto(body, env) {
+  const cats = pulisciCategorie(body.categorie);
+  if (!cats.length) throw new ErroreLettura("Mancano le categorie del bilancio.");
+  let file;
+  if (body.tipo === "pdf" && typeof body.dati === "string" && body.dati) file = { type: "document", source: { type: "base64", media_type: "application/pdf", data: body.dati } };
+  else if (body.tipo === "testo" && typeof body.dati === "string" && body.dati.trim()) file = { type: "text", text: "ESTRATTO CONTO (testo del file):\n" + body.dati.slice(0, MAX_DATI) };
+  else throw new ErroreLettura("Manca il file dell'estratto conto.");
+  return leggi(env, SYSTEM_ESTRATTO, [
+    file,
+    { type: "text", text: `ESEMPI dalle voci già registrate (descrizione | categoria):\n${elenco(body.esempi, 300) || "nessuno"}` },
+  ], schemaEstratto(cats), "low", 64000);
+}
+
 function cors(env, req) {
   const origin = req.headers.get("Origin") || "";
   const ok = origin === env.ALLOWED_ORIGIN || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
@@ -49,6 +158,17 @@ export default {
 
     let body;
     try { body = await req.json(); } catch { return risposta("Richiesta non valida", 400, h); }
+
+    const percorso = new URL(req.url).pathname;
+    if (percorso === "/scontrino" || percorso === "/estratto") {
+      const json = (o, stato) => new Response(JSON.stringify(o), { status: stato, headers: { ...h, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+      try { return json(await (percorso === "/scontrino" ? scontrino : estratto)(body, env), 200); }
+      catch (e) {
+        console.error("errore lettura:", e && e.name, e && e.status, e && e.message);
+        return json({ errore: messaggioErrore(e) }, e instanceof ErroreLettura ? 400 : 502);
+      }
+    }
+
     const dati = String(body.dati || "").slice(0, MAX_DATI);
     const messages = (Array.isArray(body.messages) ? body.messages : [])
       .filter(m => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
@@ -87,12 +207,7 @@ export default {
         else if (fin.stop_reason === "max_tokens") await w.write(enc.encode("\n\nLa risposta è stata interrotta perché troppo lunga."));
       } catch (e) {
         console.error("errore:", e && e.name, e && e.status, e && e.message);
-        let msg = "Errore del consulente.";
-        if (e instanceof Anthropic.AuthenticationError) msg = "Chiave API non valida: controlla il segreto ANTHROPIC_API_KEY su Cloudflare.";
-        else if (e instanceof Anthropic.RateLimitError) msg = "Troppe richieste o tetto di spesa raggiunto: riprova più tardi.";
-        else if (e instanceof Anthropic.BadRequestError) msg = "Richiesta rifiutata dall'API: " + e.message;
-        else if (e instanceof Anthropic.APIError) msg = `Errore dell'API (${e.status}): ${e.message}`;
-        await w.write(enc.encode("\n\n" + msg));
+        await w.write(enc.encode("\n\n" + messaggioErrore(e)));
       } finally {
         await w.close();
       }
