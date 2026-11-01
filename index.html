@@ -656,6 +656,7 @@ async function readRange(sheetName, address) {
 // ── DATI ──────────────────────────────────────────────────────
 let cachedRows = null, cacheTime = 0;
 let budgetCache = null, casaCache = null, cfoCache = null, serviziCache = null;
+let _righeAnni = {}; // spese degli altri anni, per gli scontrini
 
 async function righeDelFile(fileId, tabella){
   const data = await apiGet(`/me/drive/items/${fileId}/workbook/tables/${tabella||'TblTransazioni'}/rows`);
@@ -675,7 +676,7 @@ async function getTransazioni() {
   return cachedRows;
 }
 function invalidateCache() { cachedRows=null; cacheTime=0; }
-function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; bolletteCache=null; }
+function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; _righeAnni={}; bolletteCache=null; }
 
 async function getBudget() {
   if (!budgetCache) { const d = await readRange('BUDGET MASTER','B4:R32'); budgetCache = d.values; }
@@ -1724,7 +1725,7 @@ async function chiedi(testo){
 
 // ── ESTRATTO CONTO, SCONTRINI E PREZZI ────────────────────────
 // li legge Claude (Sonnet 5.5) tramite il ponte; scontrini e articoli vanno nei fogli SCONTRINI e ARTICOLI del file, le foto nella cartella Scontrini accanto al file
-const wb = () => `/me/drive/items/${getConfig().fileId}/workbook`;
+const wb = id => `/me/drive/items/${id || getConfig().fileId}/workbook`;
 const cartellaFile = () => { const p = (getConfig()||{}).filePath || DEFAULT_PATH; return p.slice(0, p.lastIndexOf('/')); };
 const annoFile = () => { const m = String((getConfig()||{}).filePath || DEFAULT_PATH).match(/20\d\d/); return m ? +m[0] : new Date().getFullYear(); };
 const isoValida = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s||''));
@@ -1763,33 +1764,53 @@ async function leggiConClaude(via, body){
 // fogli SCONTRINI e ARTICOLI: creati la prima volta che si salva, mai sopra un foglio che ha già dati
 const TAB_SCONTRINI = { nome:'TblScontrini', foglio:'SCONTRINI', col:['ID','DATA','ORA','NEGOZIO','TOTALE','PAGATO','PAGAMENTO','ARTICOLI','FOTO','SPESA','CARICATO'] };
 const TAB_ARTICOLI = { nome:'TblArticoli', foglio:'ARTICOLI', col:['ID_SCONTRINO','DATA','NEGOZIO','PRODOTTO','MARCA','CATEGORIA','SOTTOCATEGORIA','QUANTITA','UNITA','CONTENUTO','CONTENUTO_UNITA','PREZZO','SCONTO','PREZZO_UNITARIO','UNITA_PREZZO','TESTO'] };
-async function tabellaPronta(T){
-  if (T.ok) return;
-  try { await apiGet(`${wb()}/tables/${T.nome}`); T.ok = true; return; } catch(e) {}
+async function tabellaPronta(T, id = getConfig().fileId){
+  T.ok = T.ok || {}; if (T.ok[id]) return;
+  try { await apiGet(`${wb(id)}/tables/${T.nome}`); T.ok[id] = true; return; } catch(e) {}
   const f = encodeURIComponent(T.foglio);
   let esiste = true;
-  try { await apiGet(`${wb()}/worksheets('${f}')`); } catch(e) { esiste = false; }
+  try { await apiGet(`${wb(id)}/worksheets('${f}')`); } catch(e) { esiste = false; }
   if (esiste) {
-    const u = await apiGet(`${wb()}/worksheets('${f}')/usedRange(valuesOnly=true)`);
+    const u = await apiGet(`${wb(id)}/worksheets('${f}')/usedRange(valuesOnly=true)`);
     if ((u.values||[]).some(r => r.some(v => v!=='' && v!=null))) throw new Error(`il foglio ${T.foglio} esiste già e ha dei dati: rinominalo nel file Excel`);
-  } else await apiPost(`${wb()}/worksheets/add`, {name:T.foglio});
+  } else await apiPost(`${wb(id)}/worksheets/add`, {name:T.foglio});
   const ind = `A1:${String.fromCharCode(64 + T.col.length)}1`;
-  await apiPatch(`${wb()}/worksheets('${f}')/range(address='${ind}')`, {values:[T.col]});
-  const t = await apiPost(`${wb()}/worksheets('${f}')/tables/add`, {address:ind, hasHeaders:true});
-  await apiPatch(`${wb()}/tables/${encodeURIComponent(t.id)}`, {name:T.nome});
-  T.ok = true;
+  await apiPatch(`${wb(id)}/worksheets('${f}')/range(address='${ind}')`, {values:[T.col]});
+  const t = await apiPost(`${wb(id)}/worksheets('${f}')/tables/add`, {address:ind, hasHeaders:true});
+  await apiPatch(`${wb(id)}/tables/${encodeURIComponent(t.id)}`, {name:T.nome});
+  T.ok[id] = true;
 }
-async function righeTabella(T){
-  try { const d = await apiGet(`${wb()}/tables/${T.nome}/rows`); T.ok = true; return (d.value||[]).map(r => r.values[0]).filter(v => v.some(x => x!=='' && x!=null)); }
+async function righeTabella(T, id = getConfig().fileId){
+  try { const d = await apiGet(`${wb(id)}/tables/${T.nome}/rows`); return (d.value||[]).map(r => r.values[0]).filter(v => v.some(x => x!=='' && x!=null)); }
   catch(e) { if (/ItemNotFound|not ?found/i.test(e.message)) return []; throw e; }
+}
+// ogni scontrino sta nel file del suo anno: storico prezzi e controlli li leggono tutti
+async function righeOgniAnno(T){
+  const cur = getConfig().fileId, anni = Object.values(await anniDisponibili().catch(() => ({}))).map(a => a.id);
+  const L = anni.includes(cur) ? anni : [cur, ...anni];
+  return (await Promise.all(L.map(id => id === cur ? righeTabella(T, id) : righeTabella(T, id).catch(() => [])))).flat();
+}
+// le spese dell'anno dello scontrino, dal file di quell'anno; null se quel file non c'è
+async function righeAnno(y){
+  if (y === annoFile()) return {id: getConfig().fileId, righe: await getTransazioni()};
+  const a = (await anniDisponibili().catch(() => ({})))[y];
+  if (!a) return null;
+  if (!_righeAnni[y]) _righeAnni[y] = await righeDelFile(a.id);
+  return {id: a.id, righe: _righeAnni[y]};
+}
+async function assegnaAnno(x){
+  const y = isoValida(x.d.data) ? +x.d.data.slice(0, 4) : annoFile();
+  if (x.anno === y && x.righe !== undefined) return;
+  const f = await righeAnno(y).catch(() => null);
+  x.anno = y; x.fileId = f ? f.id : getConfig().fileId; x.righe = f ? f.righe : null;
 }
 let scontriniCache = null, articoliCache = null;
 async function getScontrini(){
-  if (!scontriniCache) scontriniCache = (await righeTabella(TAB_SCONTRINI)).map(v => ({id:String(v[0]), data:parseDate(v[1]), ora: typeof v[2]==='number' ? `${String(Math.floor(v[2]*24)).padStart(2,'0')}:${String(Math.round(v[2]*1440)%60).padStart(2,'0')}` : v[2], negozio:v[3], totale:+v[4]||0, pagato:+v[5]||0, pagamento:v[6], n:+v[7]||0, foto:v[8], spesa:v[9]}));
+  if (!scontriniCache) scontriniCache = (await righeOgniAnno(TAB_SCONTRINI)).map(v => ({id:String(v[0]), data:parseDate(v[1]), ora: typeof v[2]==='number' ? `${String(Math.floor(v[2]*24)).padStart(2,'0')}:${String(Math.round(v[2]*1440)%60).padStart(2,'0')}` : v[2], negozio:v[3], totale:+v[4]||0, pagato:+v[5]||0, pagamento:v[6], n:+v[7]||0, foto:v[8], spesa:v[9]}));
   return scontriniCache;
 }
 async function getArticoli(){
-  if (!articoliCache) articoliCache = (await righeTabella(TAB_ARTICOLI)).map(v => ({id:String(v[0]), data:parseDate(v[1]), negozio:v[2], prodotto:String(v[3]||''), marca:String(v[4]||''), categoria:v[5], sotto:String(v[6]||''), q:+v[7]||1, unita:v[8], cont:+v[9]||0, contU:v[10], prezzo:+v[11]||0, sconto:+v[12]||0, pu:+v[13]||0, puU:v[14]||'pz', testo:v[15]}));
+  if (!articoliCache) articoliCache = (await righeOgniAnno(TAB_ARTICOLI)).map(v => ({id:String(v[0]), data:parseDate(v[1]), negozio:v[2], prodotto:String(v[3]||''), marca:String(v[4]||''), categoria:v[5], sotto:String(v[6]||''), q:+v[7]||1, unita:v[8], cont:+v[9]||0, contU:v[10], prezzo:+v[11]||0, sconto:+v[12]||0, pu:+v[13]||0, puU:v[14]||'pz', testo:v[15]}));
   return articoliCache;
 }
 // prezzo per kg o per litro quando si conosce il formato, altrimenti al pezzo
@@ -1830,7 +1851,8 @@ async function vEstratto(){
   return titolo + `
   <p class="muted" style="margin-bottom:16px">Carica l'estratto scaricato dalla banca: confronto ogni movimento con il file Excel e ti dico cosa manca, cosa è diverso e cosa è segnato solo nell'app.</p>
   ${seg([['conto','Conto corrente'],['carta','Carta di credito']], ES.tipo, 'setTipoEstratto')}
-  <label class="drop">${ico('FileUp')}<b>Scegli il file</b><span>PDF, Excel, CSV o screenshot dell'app della banca</span><input type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" multiple onchange="leggiEstratto(this.files);this.value=''"></label>
+  <label class="drop">${ico('FileUp')}<b>Scegli il file</b><span>PDF, Excel o CSV scaricato dalla banca</span><input type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" onchange="leggiEstratto(this.files);this.value=''"></label>
+  <label class="btn soft" style="margin-top:8px">Oppure screenshot dell'app della banca<input type="file" accept="image/*" multiple style="display:none" onchange="leggiEstratto(this.files);this.value=''"></label>
   ${ES.errore?`<p class="avviso">${ico('TriangleAlert')}<span>${esc(ES.errore)}</span></p>`:''}
   <p class="note">Il file viene letto da Claude di Anthropic tramite il tuo ponte (pochi centesimi a estratto) e non viene salvato da nessuna parte. Nel file Excel non cambia nulla finché non confermi tu.</p>`;
 }
@@ -2127,20 +2149,22 @@ async function leggiScontrino(x){
     for (const a of [...art].reverse()) { const k = `${a.prodotto} | ${a.marca} | ${a.sotto}`; if (a.prodotto && !visti.has(k)) { visti.add(k); prodotti.push(k); } if (a.sotto) sotto.add(a.sotto); }
     x.d = await leggiConClaude('/scontrino', { media_type:'image/jpeg', immagini: await Promise.all(foto.pezzi.map(aBase64)), categorie: tutteCat(rows), prodotti: prodotti.slice(0, 400), sottocategorie: [...sotto] });
     x.d.articoli = x.d.articoli || [];
+    await assegnaAnno(x);
     x.stato = 'pronto'; x.errore = '';
     valutaScontrino(x);
   } catch(e) { x.stato = 'errore'; x.errore = e.message || String(e); }
 }
 function candidatiSpesa(x){
   const d = x.d;
-  const usate = new Set([...(scontriniCache||[]).map(s => s.spesa), ...SC.filter(y => y !== x && y.scelta === 'collega' && y.spesa != null && y.stato !== 'scartato').map(y => chiaveSpesa(trovaRiga(y.spesa)))]);
+  const usate = new Set([...(scontriniCache||[]).map(s => s.spesa), ...SC.filter(y => y !== x && y.scelta === 'collega' && y.spesa != null && y.stato !== 'scartato').map(y => chiaveSpesa(rigaDi(y)))]);
   // stesso importo entro 3 giorni, o entro 15 se la descrizione nomina il negozio (spesa segnata qualche giorno dopo)
   const vicina = r => { const g = giorniTra(r.data, d.data); return g <= 3 || (g <= 15 && somiglianza(r.descrizione, d.negozio) > 0); };
   // nel file può esserci il totale o solo la parte pagata (senza buoni pasto)
   const importo = r => Math.abs(-r.valore - d.totale) < 0.01 || (d.pagato > 0 && Math.abs(-r.valore - d.pagato) < 0.01);
-  return (cachedRows||[]).filter(r => r.valore < 0 && r.data && importo(r) && vicina(r) && !usate.has(chiaveSpesa(r)))
+  return (x.righe||[]).filter(r => r.valore < 0 && r.data && importo(r) && vicina(r) && !usate.has(chiaveSpesa(r)))
     .sort((a, b) => giorniTra(a.data, d.data) - giorniTra(b.data, d.data)).slice(0, 4);
 }
+const rigaDi = x => (x.righe||[]).find(r => r._index === x.spesa);
 function valutaScontrino(x){
   const d = x.d, av = x.avvisi = [];
   x.cat = x.cat || d.categoria_spesa;
@@ -2153,7 +2177,7 @@ function valutaScontrino(x){
     || SC.find((y, i) => i < pos && y.d && y.stato !== 'scartato' && y.d.data === d.data && Math.abs(y.d.totale - d.totale) < 0.005));
   if (gia) av.push(`Sembra già caricato: ${esc(gia.negozio || (gia.d && gia.d.negozio) || 'scontrino')} del ${giornoBreve(d.data)}, ${fmt(d.totale)}.`);
   x.cand = isoValida(d.data) ? candidatiSpesa(x) : [];
-  const altroAnno = isoValida(d.data) && +d.data.slice(0,4) !== annoFile();
+  const altroAnno = isoValida(d.data) && !x.righe;
   if (gia) x.scelta = 'scarta';
   else if (x.cand.length) { x.scelta = 'collega'; x.spesa = x.cand[0]._index; }
   else if (altroAnno) x.scelta = 'storico';
@@ -2175,19 +2199,21 @@ async function salvaScontrino(x){
   x.stato = 'salvataggio'; x.errore = ''; aggiornaScontrini();
   try {
     const d = x.d, cfg = getConfig();
-    await Promise.all([tabellaPronta(TAB_SCONTRINI), tabellaPronta(TAB_ARTICOLI), cartellaScontrini()]);
+    await assegnaAnno(x);
+    const id = x.fileId;
+    await Promise.all([tabellaPronta(TAB_SCONTRINI, id), tabellaPronta(TAB_ARTICOLI, id), cartellaScontrini()]);
     if (!x.foto) x.foto = await caricaFoto(x.blob, `${isoValida(d.data) ? d.data : 'senza-data'}_${slug(d.negozio)}_${x.id}.jpg`);
     let spesa = 'solo storico prezzi';
-    if (x.scelta === 'collega') spesa = chiaveSpesa(trovaRiga(x.spesa));
+    if (x.scelta === 'collega') spesa = chiaveSpesa(rigaDi(x));
     else if (x.scelta === 'nuova') {
-      if (!x.spesaFatta) { const riga = rigaDaScontrino(x); await apiPost(`${wb()}/tables/${cfg.tableName}/rows`, {values:[riga]}); x.spesaFatta = `${riga[7]}|${riga[2]}|${riga[4]}`; invalidateCache(); }
+      if (!x.spesaFatta) { const riga = rigaDaScontrino(x); await apiPost(`${wb(id)}/tables/${cfg.tableName}/rows`, {values:[riga]}); x.spesaFatta = `${riga[7]}|${riga[2]}|${riga[4]}`; invalidateCache(); _righeAnni = {}; _anniCache = null; }
       spesa = x.spesaFatta;
     }
     if (!x.rigaFatta) {
-      await apiPost(`${wb()}/tables/${TAB_SCONTRINI.nome}/rows`, {values:[[x.id, d.data, d.ora, d.negozio, d.totale, d.pagato || d.totale, d.pagamento, d.articoli.length, x.foto, spesa, new Date().toISOString().slice(0,16).replace('T',' ')]]});
+      await apiPost(`${wb(id)}/tables/${TAB_SCONTRINI.nome}/rows`, {values:[[x.id, d.data, d.ora, d.negozio, d.totale, d.pagato || d.totale, d.pagamento, d.articoli.length, x.foto, spesa, new Date().toISOString().slice(0,16).replace('T',' ')]]});
       x.rigaFatta = true;
     }
-    if (d.articoli.length) await apiPost(`${wb()}/tables/${TAB_ARTICOLI.nome}/rows`, {values: d.articoli.map(a => { const [pu, puU] = prezzoUnitario(a); return [x.id, d.data, d.negozio, a.prodotto, a.marca, a.categoria, a.sottocategoria, +a.quantita || 1, a.unita, +a.contenuto || 0, a.contenuto_unita || '', +a.prezzo || 0, +a.sconto || 0, Math.round(pu*10000)/10000, puU, a.testo]; })});
+    if (d.articoli.length) await apiPost(`${wb(id)}/tables/${TAB_ARTICOLI.nome}/rows`, {values: d.articoli.map(a => { const [pu, puU] = prezzoUnitario(a); return [x.id, d.data, d.negozio, a.prodotto, a.marca, a.categoria, a.sottocategoria, +a.quantita || 1, a.unita, +a.contenuto || 0, a.contenuto_unita || '', +a.prezzo || 0, +a.sconto || 0, Math.round(pu*10000)/10000, puU, a.testo]; })});
     scontriniCache = null; articoliCache = null;
     x.stato = 'salvato'; x.blob = null; x.file = null;
     aggiornaScontrini();
@@ -2256,6 +2282,7 @@ function sceltaScontrino(v, idx){ SX.scelta = v; if (idx != null) SX.spesa = idx
 function modScontrino(k, v){
   const d = SX.d;
   if (k === 'totale' || k === 'pagato') d[k] = parseFloat(String(v).replace(',', '.')) || 0; else d[k] = v;
+  if (k === 'data') { const x = SX; assegnaAnno(x).then(() => { if (SX === x) { valutaScontrino(x); x.auto = false; disegnaScontrino(); } }); }
   const scelta = SX.scelta, spesa = SX.spesa; valutaScontrino(SX);
   if (scelta === 'nuova' || scelta === 'storico') SX.scelta = scelta; else if (scelta === 'collega' && SX.cand.some(r => r._index === spesa)) SX.spesa = spesa;
   SX.auto = false; disegnaScontrino();
@@ -2274,7 +2301,7 @@ function nuovoArt(){
 function togliArt(i){ SX.d.articoli.splice(i, 1); SX.mod = null; const scelta = SX.scelta, spesa = SX.spesa; valutaScontrino(SX); SX.scelta = scelta; SX.spesa = spesa; SX.auto = false; disegnaScontrino(); }
 function disegnaScontrino(){
   const x = SX; if (!x || !x.d) return;
-  const d = x.d, cats = tutteCat(cachedRows||[]), altroAnno = isoValida(d.data) && +d.data.slice(0,4) !== annoFile();
+  const d = x.d, cats = tutteCat(cachedRows||[]), altroAnno = isoValida(d.data) && !x.righe;
   const sotto = [...new Set([...(articoliCache||[]).map(a => a.sotto), ...d.articoli.map(a => a.sottocategoria)].filter(Boolean))].sort();
   const somma = d.articoli.reduce((s, a) => s + (+a.prezzo || 0), 0);
   const opz = (v, titolo, sub, idx) => { const on = x.scelta === v && (idx == null || x.spesa === idx); return `<button class="row" onclick="sceltaScontrino('${v}'${idx != null ? ',' + idx : ''})"><span class="check ${on ? 'on' : ''}">${on ? ico('Check') : ''}</span><span class="row-main"><span class="row-title">${titolo}</span>${sub ? `<span class="row-sub">${sub}</span>` : ''}</span></button>`; };
@@ -2304,7 +2331,7 @@ function disegnaScontrino(){
     <div class="list">
       ${(x.cand||[]).map(r => opz('collega', `Collega a ${esc(frase(r.descrizione) || nome(r.tipologia))}`, `${giornoBreve(r.data)}, ${esc(nome(r.tipologia))}, ${fmt(-r.valore)}`, r._index)).join('')}
       ${altroAnno ? '' : opz('nuova', 'Aggiungi come nuova spesa', `${fmt(d.pagato > 0 ? d.pagato : d.totale)} in ${esc(nome(x.cat).toLowerCase())}, con la data dello scontrino`)}
-      ${opz('storico', 'Solo storico prezzi', altroAnno ? `È del ${d.data.slice(0,4)}: lo uso solo per i prezzi` : 'Non tocca le spese del file')}
+      ${opz('storico', 'Solo storico prezzi', altroAnno ? `Non trovo il file del ${d.data.slice(0,4)}: lo uso solo per i prezzi` : 'Non tocca le spese del file')}
       ${opz('scarta', 'Scarta', 'Non salvare questo scontrino')}
     </div>
     ${x.scelta === 'nuova' ? `<div class="list plain" style="margin-top:8px">${campo('Categoria', `<select class="field" onchange="SX.cat=this.value;disegnaScontrino()">${cats.map(c => `<option value="${esc(c)}" ${c === x.cat ? 'selected' : ''}>${esc(nome(c))}</option>`).join('')}</select>`)}</div>` : ''}
@@ -2320,6 +2347,11 @@ async function salvaDaFoglio(){
   const x = SX; if (!x) return;
   if (await salvaScontrino(x)) { closeSheet(); SX = null; toast(x.stato === 'scartato' ? 'Scontrino scartato' : 'Scontrino salvato'); getScontrini().then(() => { if (S.view === 'scontrini') render(); }).catch(() => {}); }
 }
+async function apriFotoScontrino(nomeFile){
+  const w = window.open('', '_blank');
+  try { const f = await apiGet(`/me/drive/root:/${(cartellaFile() + '/Scontrini/' + nomeFile).split('/').map(encodeURIComponent).join('/')}`); if (w) w.location = f.webUrl; else location.href = f.webUrl; }
+  catch(e) { if (w) w.close(); toast('Non trovo la foto nella cartella Scontrini'); }
+}
 async function apriSalvato(id){
   const s = (scontriniCache||[]).find(x => x.id === id); if (!s) return;
   const art = (await getArticoli().catch(() => [])).filter(a => a.id === id);
@@ -2329,7 +2361,8 @@ async function apriSalvato(id){
     <p class="tx-amount">${fmt(s.totale)}</p><p class="tx-desc">${s.data ? giornoLungo(s.data) + ' ' + String(s.data).slice(0,4) : ''}${s.ora ? ', ' + esc(s.ora) : ''}</p>
     <div class="list">${art.map(a => `<div class="row"><span class="row-main"><span class="row-title">${esc(a.prodotto)}${a.marca ? `<span class="muted">, ${esc(a.marca)}</span>` : ''}</span><span class="row-sub">${esc(a.sotto || a.categoria)}${a.puU !== 'pz' ? `, ${nf.format(a.pu)} ${perUnita(a.puU)}` : ''}</span></span><span class="amt">${fmt(a.prezzo)}</span></div>`).join('') || '<p class="empty">Nessun articolo.</p>'}</div>
     <p class="note">${s.spesa === 'solo storico prezzi' ? 'Usato solo per lo storico dei prezzi.' : s.spesa ? 'Collegato alla spesa del ' + giornoBreve(String(s.spesa).split('|')[0]) + '.' : ''}</p>
-    ${foto ? `<a class="btn soft" style="margin-top:16px;text-decoration:none" href="${esc(foto)}" target="_blank" rel="noopener">Apri la foto su OneDrive</a>` : ''}
+    ${foto ? `<a class="btn soft" style="margin-top:16px;text-decoration:none" href="${esc(foto)}" target="_blank" rel="noopener">Apri la foto su OneDrive</a>`
+      : s.foto ? `<button class="btn soft" style="margin-top:16px" onclick='apriFotoScontrino(${JSON.stringify(String(s.foto)).replace(/'/g, "&#39;")})'>Apri la foto su OneDrive</button>` : ''}
   </div>`);
 }
 
@@ -2705,7 +2738,8 @@ async function vBollette(){
   };
   const mesiOrd = [...new Set(L.map(b => chiaveMese(b.anno, b.mese)))].sort((a, b) => b - a);
   return `<h1 class="lt">Bollette</h1>
-  <label class="drop" id="dropBol">${ico('FileUp')}<b>Carica una bolletta</b><span>PDF, oppure foto delle pagine (anche più insieme)</span><input type="file" accept="application/pdf,.pdf,image/*" multiple onchange="leggiBolletta(this.files);this.value=''"></label>
+  <label class="drop" id="dropBol">${ico('FileUp')}<b>Carica il PDF della bolletta</b><span>Dai file del telefono o del computer</span><input type="file" accept="application/pdf,.pdf" onchange="leggiBolletta(this.files);this.value=''"></label>
+  <label class="btn soft" style="margin-top:8px">Oppure foto delle pagine<input type="file" accept="image/*" multiple style="display:none" onchange="leggiBolletta(this.files);this.value=''"></label>
   ${BL.fase === 'lettura' ? `<div class="card" style="margin-top:16px"><div class="loading" style="padding:16px 0"><span class="spinner"></span>Claude sta leggendo la bolletta</div></div>` : ''}
   ${BL.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>${esc(BL.errore)}</span></p>` : ''}
   <p class="note">La bolletta viene letta da Claude (5-9 centesimi), controlli i valori, poi va nel file GRAFICO BOLLETTE e il PDF nella cartella delle utenze.</p>
