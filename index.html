@@ -171,6 +171,7 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .diff-track span{position:absolute;top:0;font-size:12px;line-height:16px;font-variant-numeric:tabular-nums;color:var(--text-2);white-space:nowrap}
 .stack{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:var(--s2) 0 var(--s1)}
 .stack i{display:block;height:100%}
+.pallino{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:var(--s1);vertical-align:1px}
 .legend{display:grid;gap:var(--s1);font-size:14px;color:var(--text-2)}
 .legend div{display:flex;align-items:center;gap:var(--s1)}
 .legend i{width:8px;height:8px;border-radius:2px;background:var(--c);flex:none}
@@ -798,6 +799,7 @@ const VIEWS = {
   impostazioni:{t:'Impostazioni',r:vImpost,parent:'analisi',w:'stretto'},
   anni:{t:'Negli anni',r:vAnni,parent:'analisi'},
   bollette:{t:'Bollette',r:vBollette,parent:'analisi',after:dopoBollette},
+  bolletteDati:{t:'Dentro le bollette',r:vBolletteDati,parent:'bollette'},
   uniforma:{t:'Uniforma',r:vUniforma,parent:'analisi',w:'stretto'},
   estratto:{t:'Estratto conto',r:vEstratto,parent:'analisi',w:'stretto'},
   scontrini:{t:'Scontrini',r:vScontrini,parent:'analisi',after:dopoScontrini,w:'stretto'},
@@ -2716,7 +2718,8 @@ async function getBollette(){
   const id = await idFileBollette();
   const d = await apiGet(`/me/drive/items/${id}/workbook/tables/TblBollette/rows`);
   bolletteCache = (d.value||[]).map(r => { const v = r.values[0]; return { ut:String(v[0]).toLowerCase(), anno:+v[1], mese:+v[2], da:parseDate(v[3]), al:parseDate(v[4]), consumo:+v[5]||0, unita:v[6], stimato:v[7]==='SI',
-    totale:+v[8]||0, tasse:+v[9]||0, materia:+v[10]||0, altri:+v[11]||0, eu:+v[12]||0, mu:+v[13]||0, indice:+v[14]||0, indiceNome:v[15], fattura:v[16], dataFattura:parseDate(v[17]), file:v[18], note:v[19] }; })
+    totale:+v[8]||0, tasse:+v[9]||0, materia:+v[10]||0, altri:+v[11]||0, eu:+v[12]||0, mu:+v[13]||0, indice:+v[14]||0, indiceNome:v[15], fattura:v[16], dataFattura:parseDate(v[17]), file:v[18], note:v[19],
+    voci: v[20] === '' || v[20] == null ? null : {vendita:+v[20]||0, rete:+v[21]||0, accise:+v[22]||0, iva:+v[23]||0, altre:+v[24]||0}, oneri:+v[25]||0, fissa:+v[26]||0, pv:+v[27]||0 }; })
     .filter(b => b.anno && b.mese && (b.ut === 'gas' || b.ut === 'luce'));
   return bolletteCache;
 }
@@ -2745,7 +2748,8 @@ async function vBollette(){
   <p class="note">La bolletta viene letta da Claude (5-9 centesimi), controlli i valori, poi va nel file GRAFICO BOLLETTE e il PDF nella cartella delle utenze.</p>
   ${errore ? `<p class="avviso">${ico('TriangleAlert')}<span>Non riesco a leggere GRAFICO BOLLETTE: ${esc(errore)}</span></p>` : ''}
   ${L.length ? `<div class="cols"><div>
-    <h2 class="gh">Ultime bollette</h2><div class="list">${scheda('luce')}${scheda('gas')}</div>
+    <h2 class="gh">Ultime bollette</h2><div class="list">${scheda('luce')}${scheda('gas')}
+      <button class="row" onclick="go('bolletteDati','push')"><span class="ic">${ico('ChartPie')}</span><span class="row-main"><span class="row-title">Dentro le bollette</span><span class="row-sub">IVA, accise, prezzo per unità, cosa è aumentato</span></span>${chev()}</button></div>
     <h2 class="gh">Mese per mese</h2>
     ${seg([['costo','Costo'],['gas','Consumo gas'],['luce','Consumo luce'],['prezzo','Prezzo']], S.bolGraf || 'costo', 'setBolGraf')}
     <div class="card">${graficoBollette(L, S.bolGraf || 'costo')}</div>
@@ -2771,7 +2775,10 @@ function graficoBollette(L, tipo){
   const serie = tipo === 'costo' ? [['luce', 'var(--bar-warn)', b => b.totale, 'Luce €'], ['gas', 'var(--line-2)', b => b.totale, 'Gas €']]
     : tipo === 'gas' ? [['gas', 'var(--line-2)', b => b.consumo, 'Gas Smc']] : tipo === 'luce' ? [['luce', 'var(--bar-warn)', b => b.consumo, 'Luce kWh']]
     : [['gas', 'var(--line-2)', b => b.mu, 'Gas materia €/Smc'], ['gas', 'var(--text-3)', b => b.indice || null, 'Indice PSV']];
-  const dati = serie.map(([ut, col, f, nome]) => ({col, nome, v: K.map(k => val(ut, k, f))}));
+  return disegnaLinee(K, serie.map(([ut, col, f, nome]) => ({col, nome, v: K.map(k => val(ut, k, f))})));
+}
+// linee mese per mese: K sono i mesi (anno*12+mese-1), dati [{col, nome, v:[...]}] con null dove manca il valore
+function disegnaLinee(K, dati){
   const W = 344, H = 184, Lm = 48, B = 24, T = 8, w = W - Lm, h = H - B - T;
   const tutti = dati.flatMap(d => d.v.filter(x => x != null)), mx = Math.max(...tutti, 0.0001);
   const dec = mx < 2 ? 2 : 0, step = mx / 4, top = mx * 1.1;
@@ -2786,12 +2793,78 @@ function graficoBollette(L, tipo){
   K.forEach((k, i) => { if (i % 2 === 0) s += `<text x="${X(i)}" y="${H-4}" text-anchor="middle">${mese(k % 12).slice(0, 3).toLowerCase()}</text>`; });
   return s + `</svg><div class="key">${dati.map(d => `<span style="--c:${d.col}"><i></i>${d.nome}</span>`).join('')}</div>`;
 }
+// ── DENTRO LE BOLLETTE: le voci (energia, rete, accise, IVA, altre partite), il prezzo per unità e cosa è cambiato in un anno
+const VOCI_BOL = [['vendita', 'Energia', 'var(--line-2)'], ['rete', 'Rete e oneri di sistema', 'var(--line-1)'], ['accise', 'Accise', 'var(--bar-warn)'], ['iva', 'IVA', 'var(--bar-ok)'], ['altre', 'Altre partite', 'var(--track)']];
+const SPIEGA_VOCE = { vendita:'Il prezzo dell\'energia o del gas, più la quota fissa del fornitore', rete:'Trasporto, contatore, potenza e oneri generali: tariffe decise dall\'Autorità, uguali per tutti',
+  accise:'Imposte sul consumo', iva:'10% su quasi tutto, 22% sul gas oltre una certa soglia', altre:'Sconti, arrotondamenti, conguagli e ricalcoli' };
+const aD = t => (/^[aeiouàèéìòù]/i.test(t) ? 'ad ' : 'a ') + t;
+// ricalcoli: consumi stimati prima e corretti con la lettura vera, finiscono nelle altre partite e non nel consumo del mese
+const ricalcolata = b => b.voci && Math.abs(b.voci.altre) > 10;
+function setBdUt(v){ S.bdUt = v; render(); }
+async function vBolletteDati(){
+  let L = []; try { L = await getBollette(); } catch(e) { return `<h1 class="lt">Dentro le bollette</h1><p class="avviso">${ico('TriangleAlert')}<span>Non riesco a leggere GRAFICO BOLLETTE: ${esc(String(e.message).slice(0, 160))}</span></p>`; }
+  const ut = S.bdUt || 'luce', u = UT[ut], B = L.filter(b => b.ut === ut && b.voci).sort((a, b) => chiaveMese(a.anno, a.mese) - chiaveMese(b.anno, b.mese));
+  const testa = `<h1 class="lt">Dentro le bollette</h1>${seg([['luce', 'Luce'], ['gas', 'Gas']], ut, 'setBdUt')}`;
+  if (!B.length) return testa + `<div class="card"><p>Non ci sono ancora bollette ${u.nome.toLowerCase()} con il dettaglio delle voci. Le prossime che carichi lo avranno.</p></div>`;
+  const ult = B[B.length - 1], k0 = chiaveMese(ult.anno, ult.mese);
+  const perUn = b => b.consumo ? b.totale / b.consumo : null;
+  const pct = (v, t) => t ? nf0.format(v / t * 100) + '%' : '';
+  // l'ultima bolletta, voce per voce
+  const pos = VOCI_BOL.filter(([k]) => ult.voci[k] > 0), totPos = pos.reduce((s, [k]) => s + ult.voci[k], 0);
+  const ultima = `<section class="card hero">
+    <p class="lead">${mese(ult.mese - 1)} ${ult.anno}: <b class="num">${fmt(ult.totale)}</b></p>
+    <p class="muted" style="margin-top:8px">${nf.format(ult.consumo)} ${u.unita}${ult.stimato ? ' stimati' : ''}, cioè ${perUn(ult) != null ? nf.format(perUn(ult)) + ' € per ' + u.unita + ' tutto compreso' : 'nessun consumo'}.</p>
+    <div class="stack">${pos.map(([k, , c]) => `<i style="width:${ult.voci[k] / totPos * 100}%;background:${c}"></i>`).join('')}</div>
+    <div class="list plain">${VOCI_BOL.map(([k, n, c]) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title"><i class="pallino" style="background:${c}"></i>${n}</span><span class="num">${fmt(ult.voci[k])}</span></span>
+      <span class="row-sub">${ult.voci[k] > 0 ? pct(ult.voci[k], totPos) + ' della bolletta. ' : ''}${k === 'rete' && ult.oneri ? `Di cui oneri generali di sistema ${fmt(ult.oneri)}. ` : ''}${k === 'vendita' && ult.pv ? `Energia a ${nf.format(ult.pv)} € per ${u.unita}. ` : ''}${SPIEGA_VOCE[k]}.</span></span></div>`).join('')}</div>
+    ${ult.fissa ? `<p class="note" style="margin:8px 0 0">Quota fissa ${fmt(ult.fissa)} al mese: la paghi anche senza consumare.</p>` : ''}
+  </section>`;
+  // prezzo per unità negli ultimi 13 mesi
+  const K = []; for (let k = k0 - 12; k <= k0; k++) K.push(k);
+  const di = k => B.find(b => chiaveMese(b.anno, b.mese) === k);
+  const linee = [{col:'var(--line-2)', nome:`Energia €/${u.unita}`, v: K.map(k => { const b = di(k); return b && b.pv ? b.pv : null; })},
+    {col:'var(--line-1)', nome:`Tutto compreso €/${u.unita}`, v: K.map(k => { const b = di(k); return b && b.consumo >= (ut === 'gas' ? 5 : 20) && !ricalcolata(b) ? perUn(b) : null; })}];
+  if (ut === 'gas' && B.some(b => b.indice)) linee.push({col:'var(--text-3)', nome:'Indice PSV', v: K.map(k => { const b = di(k); return b && b.indice ? b.indice : null; })});
+  const fa = B.find(b => b.anno === ult.anno - 1 && b.mese === ult.mese);
+  const prezzo = `<h2 class="gh">Prezzo per ${u.unita}</h2><div class="card">${disegnaLinee(K, linee)}
+    <p class="note" style="margin:8px 0 0">${ult.pv && fa && fa.pv ? `L'energia costa ${nf.format(ult.pv)} € per ${u.unita}, un anno fa ${nf.format(fa.pv)} €: ${etichettaVar(varPct(ult.pv, fa.pv))}. ` : ''}Il prezzo tutto compreso sale nei mesi con pochi consumi, perché le quote fisse pesano di più: per questo non lo mostro sotto i ${ut === 'gas' ? '5 Smc' : '20 kWh'}, né nei mesi con ricalcoli.</p></div>`;
+  // cosa è cambiato: ultimi 12 mesi contro gli stessi mesi dell'anno prima, solo i mesi che ci sono in tutti e due
+  const coppie = []; for (let k = k0 - 11; k <= k0; k++) { const a = di(k), b = di(k - 12); if (a && b) coppie.push([b, a]); }
+  let cambiato = '';
+  if (coppie.length >= 3) {
+    const somma = (i, f) => coppie.reduce((s, c) => s + f(c[i]), 0);
+    const T1 = somma(0, b => b.totale), T2 = somma(1, b => b.totale), C1 = somma(0, b => b.consumo), C2 = somma(1, b => b.consumo);
+    const conPv = coppie.filter(c => c[0].pv), Cp = conPv.reduce((s, c) => s + c[0].consumo, 0);
+    const pv1 = Cp ? conPv.reduce((s, c) => s + c[0].pv * c[0].consumo, 0) / Cp : null;
+    const ric = [...new Set(coppie.flat().filter(ricalcolata).map(b => `${mese(b.mese - 1).toLowerCase()} ${b.anno}`))];
+    const effConsumo = pv1 != null && !ric.length ? (C2 - C1) * pv1 * 1.1 : null, effPrezzo = effConsumo != null ? T2 - T1 - effConsumo : null;
+    const righe = VOCI_BOL.map(([k, n]) => ({k, n, a: somma(0, b => b.voci[k]), b: somma(1, b => b.voci[k])})).map(x => ({...x, d: x.b - x.a})).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
+    const sg = d => (d > 0 ? '+' : d < 0 ? '−' : '') + fmt(Math.abs(d));
+    const da = coppie[0][1], a = coppie[coppie.length - 1][1];
+    cambiato = `<h2 class="gh">Cosa è cambiato in un anno</h2>
+    <div class="card">
+      <p>Da ${mese(da.mese - 1).toLowerCase()} ${da.anno} ${aD(mese(a.mese - 1).toLowerCase())} ${a.anno} hai speso <b class="num ${T2 > T1 ? 'neg' : 'pos'}">${sg(T2 - T1)}</b> rispetto agli stessi ${coppie.length} mesi dell'anno prima (${fmt(T2)} contro ${fmt(T1)}).</p>
+      <p class="muted" style="margin-top:8px">Hai consumato ${nf.format(C2)} ${u.unita} contro ${nf.format(C1)}${effConsumo != null ? `: circa ${sg(effConsumo)} vengono dai consumi (al prezzo dell'energia dell'anno prima, IVA compresa), ${sg(effPrezzo)} da prezzi, quote fisse e altre voci` : ''}.</p>
+      ${ric.length ? `<p class="note" style="margin:8px 0 0">Ricalcoli in ${ric.join(', ')}: consumi stimati e poi corretti con la lettura vera. Sono nelle altre partite e non nei consumi di quei mesi, per questo consumi e prezzo per ${u.unita} non si possono confrontare bene.</p>` : ''}
+    </div>
+    <div class="list">${righe.map(x => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${x.n}</span><span class="num ${Math.abs(x.d) < 1 ? 'muted' : x.d > 0 ? 'neg' : 'pos'}">${sg(x.d)}</span></span>
+      <span class="row-sub num">${fmt(x.b)} contro ${fmt(x.a)}${x.a > 0 ? `, ${etichettaVar(varPct(x.b, x.a))}` : ''}</span></span></div>`).join('')}</div>
+    <p class="note">In rosso quello che è aumentato, in verde quello che è diminuito. Si confrontano solo i mesi con la bolletta in tutti e due gli anni.</p>`;
+  } else cambiato = `<h2 class="gh">Cosa è cambiato in un anno</h2><div class="card"><p class="muted">Servono almeno tre mesi con la bolletta sia quest'anno sia l'anno prima.</p></div>`;
+  // anno per anno
+  const anni = [...new Set(B.map(b => b.anno))].sort((a, b) => b - a);
+  const perAnno = `<h2 class="gh">Anno per anno</h2><div class="list">${anni.map(y => { const Y = B.filter(b => b.anno === y), t = Y.reduce((s, b) => s + b.totale, 0), c = Y.reduce((s, b) => s + b.consumo, 0), v = k => Y.reduce((s, b) => s + b.voci[k], 0);
+    return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${y} <span class="muted" style="font-size:13px">${Y.length === 1 ? '1 mese' : Y.length + ' mesi'}</span></span><span class="num">${fmt(t)}</span></span>
+      <span class="row-sub num">${nf.format(c)} ${u.unita}${c ? `, ${nf.format(t / c)} €/${u.unita}` : ''}. Energia ${fmt(v('vendita'))}, rete ${fmt(v('rete'))}, accise ${fmt(v('accise'))}, IVA ${fmt(v('iva'))}, altre ${fmt(v('altre'))}</span></span></div>`; }).join('')}</div>
+    <p class="note">Il mese è quello dei consumi fatturati. Anni con pochi mesi non sono confrontabili per il totale.</p>`;
+  return testa + `<div class="cols"><div>${ultima}${prezzo}</div><div>${cambiato}${perAnno}</div></div>`;
+}
 async function apriMeseBollette(a, m){
   const L = await getBollette(), voci = L.filter(b => b.anno === a && b.mese === m);
   const riga = (l, v) => `<div class="row"><span class="row-main"><span class="row-line"><span>${l}</span><span class="muted num">${v}</span></span></span></div>`;
   openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>${mese(m - 1)} ${a}</h2><span></span></div>
   <div class="sheet-scroll">${voci.map(b => `<p class="sublabel">${UT[b.ut].nome}, dal ${giornoBreve(b.da)} al ${giornoBreve(b.al)}</p>
-    <div class="list plain">${riga('Consumo', `${nf.format(b.consumo)} ${UT[b.ut].unita}${b.stimato ? ' (stimati)' : ''}`)}${riga('Totale', fmt(b.totale))}${riga('Tasse', fmt(b.tasse))}${riga('Materia prima', fmt(b.materia))}${riga('Altri oneri', fmt(b.altri))}
+    <div class="list plain">${riga('Consumo', `${nf.format(b.consumo)} ${UT[b.ut].unita}${b.stimato ? ' (stimati)' : ''}`)}${riga('Totale', fmt(b.totale))}${b.voci ? VOCI_BOL.map(([k, n]) => riga(n, fmt(b.voci[k]))).join('') : riga('Tasse', fmt(b.tasse)) + riga('Materia prima', fmt(b.materia)) + riga('Altri oneri', fmt(b.altri))}
     ${riga(`Costo per ${UT[b.ut].unita}`, nf.format(b.eu) + ' €')}${b.indice ? riga(`Materia contro indice ${b.indiceNome || ''}`, `${nf.format(b.mu)} € / ${nf.format(b.indice)} €`) : ''}${b.fattura ? riga('Fattura', esc(b.fattura)) : ''}</div>
     ${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}`).join('')}
     ${voci[0] && voci[0].file ? `<button class="btn soft" style="margin-top:16px" onclick="apriPdfBolletta(${esc(JSON.stringify(voci[0].file))})">Apri la bolletta</button>` : ''}
@@ -2882,7 +2955,8 @@ async function salvaBolletta(){
       const id = await idFileBollette();
       await apiPost(`/me/drive/items/${id}/workbook/tables/TblBollette/rows`, {values: daSalvare.map(u => [u.tipo === 'gas' ? 'GAS' : 'LUCE', u.anno, u.mese, u.periodo_da || '', u.periodo_al || '', u.consumo, UT[u.tipo].unita, u.stimato ? 'SI' : '',
         u.totale, u.tasse, u.quota_consumi, Math.round((u.totale - u.tasse - u.quota_consumi) * 100) / 100, u.consumo ? Math.round(u.totale / u.consumo * 1e6) / 1e6 : '', u.consumo ? Math.round(u.quota_consumi / u.consumo * 1e6) / 1e6 : '',
-        u.indice || '', u.indice ? u.indice_nome : '', d.numero || '', d.data_emissione || '', nomeFile, 'caricata dall\'app'])});
+        u.indice || '', u.indice ? u.indice_nome : '', d.numero || '', d.data_emissione || '', nomeFile, 'caricata dall\'app',
+        u.vendita, u.rete, u.accise, u.iva, Math.round((u.totale - u.vendita - u.rete - u.accise - u.iva) * 100) / 100, u.oneri_sistema, u.quota_fissa || '', u.prezzo_vendita || ''])});
       daSalvare.forEach(u => u.salva = false);
     }
     if (spese.length) {

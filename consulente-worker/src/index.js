@@ -59,6 +59,15 @@ const SYSTEM_BOLLETTA = `Leggi una bolletta italiana di luce e/o gas (PDF o foto
 - totale: il totale di quell'utenza ("Totale bolletta" della sua sezione, oppure "Totale Gas" / "Totale Energia Elettrica").
 - tasse: "Accise e Iva" oppure "Totale imposte e IVA" di quell'utenza.
 - quota_consumi: la spesa per il consumo di quell'utenza: "Quota per Consumi" nei formati recenti, "Spesa per la materia gas" / "Spesa per la materia energia elettrica" nei formati vecchi.
+- La stessa utenza divisa per voce, in euro, con il segno stampato (sconti e ricalcoli negativi):
+  - vendita: la spesa per la vendita / materia energia o gas, sia della quota consumi sia della quota fissa ("di cui spesa per la vendita");
+  - rete: "spesa per la rete e gli oneri generali di sistema" della quota consumi e della quota fissa, più la quota potenza della luce; nei formati vecchi "trasporto e gestione del contatore" più "oneri di sistema";
+  - accise: "Totale imposte" (accisa, imposta erariale, addizionali regionali);
+  - iva: "Totale IVA";
+  - altre_partite: tutto il resto (sconti, arrotondamenti, ricalcoli, bonus, canone RAI, interessi).
+  vendita + rete + accise + iva + altre_partite deve fare il totale dell'utenza: controlla la somma prima di rispondere.
+- oneri_sistema: solo informativo, già compreso in rete: "Totale oneri generali di sistema" degli elementi di dettaglio, oppure "Spesa per oneri di sistema" nei formati vecchi; 0 se non c'è.
+- quota_fissa: il totale della quota fissa dell'utenza (€); prezzo_vendita: il prezzo unitario della vendita sulla quota consumi (€/Smc o €/kWh, "di cui spesa per la vendita"), 0 se non c'è.
 - indice: il valore dell'indice di mercato del periodo se è stampato (PSV in €/Smc per il gas, PUN in €/kWh per la luce; se ci sono più fasce, la media delle fasce); 0 se non c'è. indice_nome: PSV, PUN o "".
 - fattura: numero, data_emissione e scadenza (AAAA-MM-GG), totale_da_pagare della bolletta intera, fornitore.
 - Numeri come sono stampati, senza arrotondare. leggibile = false se non è una bolletta di luce o gas.`;
@@ -110,6 +119,8 @@ const schemaBolletta = () => oggetto({
     tipo: { type: "string", enum: ["gas", "luce"] }, periodo_da: { type: "string" }, periodo_al: { type: "string" },
     consumo: { type: "number" }, unita: { type: "string", enum: ["Smc", "kWh"] }, stimato: { type: "boolean" },
     totale: { type: "number" }, tasse: { type: "number" }, quota_consumi: { type: "number" },
+    vendita: { type: "number" }, rete: { type: "number" }, accise: { type: "number" }, iva: { type: "number" }, altre_partite: { type: "number" },
+    oneri_sistema: { type: "number" }, quota_fissa: { type: "number" }, prezzo_vendita: { type: "number" },
     indice: { type: "number" }, indice_nome: { type: "string", enum: ["PSV", "PUN", ""] },
   }) },
 });
