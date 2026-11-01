@@ -2883,15 +2883,18 @@ const somma = (V, f) => V.reduce((s, v) => s + (f(v) ? Math.abs(v.importo) : 0),
 function contiBusta(b){
   const V = b.voci, bonus = somma(V, v => v.importo > 0 && BONUS_CASSA.test(v.descrizione)) || (b.anno <= 2021 ? b.bonus_irpef : 0);
   const doppie = somma(V, v => v.importo < 0 && DOPPIE.test(v.descrizione));
-  const addV = V.filter(v => v.importo < 0 && ADDIZ.test(v.descrizione) && !/dovut/i.test(v.descrizione));
-  const add = addV.length ? somma(addV, () => true) : b.addizionale_regionale + b.addizionale_comunale, r730 = Math.max(0, b.rimborso_730), comp = b.totale_competenze - doppie;
-  // lordo: l'imponibile contributivo stampato (il 730 sta in competenze in un formato e fuori nell'altro); il resto va in "altro" così la somma torna col netto
-  const lordo = b.imponibile_contributivo || comp - b.esenti - bonus - r730, irpef = comp - b.contributi_dipendente - add - b.netto;
-  return {lordo, esenti: b.esenti, bonus, r730, contributi: b.contributi_dipendente, add, irpef, altro: lordo + b.esenti + bonus + r730 - comp, netto: b.netto};
+  // 730: rimborso (in competenze) o debito (in trattenute, IRPEF e addizionali), con il segno
+  const V730 = V.filter(v => /730/.test(v.descrizione)), r730 = V730.length ? V730.reduce((s, v) => s + v.importo, 0) : b.rimborso_730;
+  const debito730 = V730.length ? somma(V730, v => v.importo < 0) : Math.max(0, -r730);
+  const addV = V.filter(v => v.importo < 0 && ADDIZ.test(v.descrizione) && !/dovut|730/i.test(v.descrizione));
+  const add = addV.length ? somma(addV, () => true) : b.addizionale_regionale + b.addizionale_comunale, comp = b.totale_competenze - doppie;
+  // lordo: l'imponibile contributivo stampato; il resto va in "altro" così la somma torna col netto
+  const lordo = b.imponibile_contributivo || comp - b.esenti - bonus - r730 - debito730, irpef = comp - b.contributi_dipendente - add - b.netto - debito730;
+  return {lordo, esenti: b.esenti, bonus, r730, contributi: b.contributi_dipendente, add, irpef, altro: lordo + b.esenti + bonus + r730 - b.contributi_dipendente - irpef - add - b.netto, netto: b.netto};
 }
-const VOCI_BUSTA = [['lordo', 'Retribuzione lorda', 1], ['esenti', 'Rimborsi e trasferte', 1], ['bonus', 'Bonus e sconti in busta', 1], ['r730', 'Rimborsi del 730', 1], ['contributi', 'Contributi INPS', -1], ['irpef', 'IRPEF', -1], ['add', 'Addizionali', -1], ['altro', 'Conguagli e altre trattenute', -1]];
-const SPIEGA_BUSTA = { lordo: 'Stipendio, straordinari, ferie e permessi pagati, tredicesima', esenti: 'Trasferte e rimborsi chilometrici: non sono tassati e ripagano spese che hai già fatto',
-  bonus: 'Bonus da 80 €, trattamento integrativo da 100 € o esonero sui contributi pagato come riga a parte', r730: 'Tasse degli anni prima che ti tornano', contributi: 'Per la pensione: il 9,19% del lordo, meno l\'esonero quando c\'era',
+const VOCI_BUSTA = [['lordo', 'Retribuzione lorda', 1], ['esenti', 'Trasferte e rimborsi km', 1], ['bonus', 'Bonus e sconti in busta', 1], ['r730', '730', 1], ['contributi', 'Contributi INPS', -1], ['irpef', 'IRPEF', -1], ['add', 'Addizionali', -1], ['altro', 'Conguagli e altre trattenute', -1]];
+const SPIEGA_BUSTA = { lordo: 'Stipendio, straordinari, ferie e permessi pagati, tredicesima', esenti: 'Senza tasse e senza contributi: non contano per pensione, TFR, malattia e disoccupazione',
+  bonus: 'Bonus da 80 €, trattamento integrativo da 100 € o esonero sui contributi pagato come riga a parte', r730: 'Le tasse dell\'anno prima: rimborso se ne avevi pagate troppe, debito se troppo poche', contributi: 'Per la pensione: il 9,19% del lordo, meno l\'esonero quando c\'era',
   irpef: 'Imposta sul reddito, già al netto delle detrazioni', add: 'Addizionali regionale e comunale dell\'anno prima, a rate',
   altro: 'Conguagli, fondi, benefit e arrotondamenti: la differenza che serve perché la somma torni col netto' };
 function sommaConti(L){ const t = {lordo:0, esenti:0, bonus:0, r730:0, contributi:0, add:0, irpef:0, altro:0, netto:0}; L.forEach(b => { const c = contiBusta(b); for (const k in t) t[k] += c[k]; }); return t; }
@@ -2907,8 +2910,56 @@ function anniBuste(B){
     // anno finito: l'IRPEF è quella definitiva dei progressivi, il resto va nei conguagli
     const tot = sommaConti(L), irpefAnno = fine.reduce((s, b) => s + b.anno_irpef_netta, 0);
     if (completo && fine.length) { tot.altro += tot.irpef - irpefAnno; tot.irpef = irpefAnno; }
-    return {y, L, mensili, completo, ultima, R, Rann, fattore, tot, tfr: B.filter(b => b.anno === y).reduce((s, b) => s + b.tfr_mese, 0)};
+    // il 730 che riguarda i redditi di quest'anno arriva in busta fra luglio e settembre dell'anno dopo
+    const dopo = B.filter(b => b.anno === y + 1 && b.tipo !== 'tfr');
+    const q730 = dopo.reduce((s, b) => s + contiBusta(b).r730, 0), noto730 = dopo.some(b => b.mese >= 9);
+    return {y, L, mensili, completo, ultima, R, Rann, fattore, tot, q730, noto730};
   }).filter(a => a.L.length);
+}
+// quello che il lavoro di un anno ti ha dato davvero: il netto in busta col 730 spostato all'anno dei redditi;
+// trasferte e rimborsi km contano solo dove pagano il netto concordato, altrove ripagano spese vere
+const nettoAnno = (a, nc) => a.tot.netto - a.tot.r730 + a.q730 - a.L.filter(b => !nc || b.azienda !== nc.az).reduce((s, b) => s + b.esenti, 0);
+
+// netto concordato: nei mesi senza straordinari il netto (senza 730 e conguagli) torna sempre sulla stessa cifra tonda, e trasferte e rimborsi km pareggiano
+const EXTRA = /straord|lav\.?\s?str|festivo|ind\.? integr|premio|tredices|retr\.? permessi/i, nomeMese = k => `${mese(k % 12).toLowerCase()} ${Math.floor(k / 12)}`;
+function nettoConcordato(B){
+  const M = B.filter(b => b.tipo === 'mensile' && b.esenti > 0 && b.mese !== 12).map(b => {
+    const ex = b.voci.filter(v => EXTRA.test(v.descrizione)).reduce((s, v) => s + v.importo, 0), cong = b.voci.filter(v => /conguaglio/i.test(v.descrizione)).reduce((s, v) => s + v.importo, 0);
+    return {b, k: chiaveMese(b.anno, b.mese), base: b.netto - contiBusta(b).r730 - cong - ex * 0.68, pulito: Math.abs(ex) < 1}; }); // straordinari: circa 68 centesimi netti per euro lordo
+  const L = B.filter(b => b.tipo === 'mensile'), az = L.length ? L[L.length - 1].azienda : '', conta = {};
+  M.filter(m => m.pulito && m.b.azienda === az).forEach(m => { const t = Math.round(m.base / 10) * 10; conta[t] = (conta[t] || 0) + 1; });
+  const P = Object.keys(conta).filter(t => conta[t] >= 3).map(t => ({T: +t, da: Math.min(...M.filter(m => m.b.azienda === az && Math.abs(m.base - t) <= 12).map(m => m.k))})).sort((x, y) => x.da - y.da);
+  if (!P.length) return null;
+  const Laz = L.filter(b => b.azienda === az), fine = chiaveMese(Laz[Laz.length - 1].anno, Laz[Laz.length - 1].mese);
+  P.forEach((p, i) => p.a = i < P.length - 1 ? P[i + 1].da - 1 : fine);
+  return {az, P, L: Laz, fine};
+}
+// con il netto fisso, aumenti del contratto e leggi nuove cambiano solo i rimborsi: quanto avrebbero dato al netto e chi li ha presi
+function eventiConcordato(nc, A){
+  const E = [], inizio = k => nc.P.some(p => p.da === k);
+  nc.P.forEach((p, i) => { if (i) E.push({k: p.da, tipo: 'nuovo', d: p.T - nc.P[i - 1].T}); });
+  nc.L.forEach((b, i) => { const b0 = nc.L[i - 1], k = chiaveMese(b.anno, b.mese);
+    if (!b0 || b.retribuzione_mensile <= b0.retribuzione_mensile + 0.5 || k <= nc.P[0].da) return;
+    const dG = b.retribuzione_mensile - b0.retribuzione_mensile, a = A.find(x => x.y === b.anno), R = a ? a.Rann : 25000, dR = dG * 12 * (1 - 0.0919);
+    // dal 2026 gli aumenti dei rinnovi pagano il 5% (L. 199/2025)
+    const d = (b.anno >= 2026 ? dR * 0.95 : dR - (fiscoAnno(b.anno, R).inTasca - fiscoAnno(b.anno, R + dR).inTasca) - 0.023 * dR) / 12;
+    E.push({k, tipo: 'aumento', dG, d, assorbito: !inizio(k)}); });
+  A.forEach(a => { const k = a.y * 12; if (k <= nc.P[0].da || k > nc.fine || !a.R) return;
+    const d = effettoLeggi(a, a.y - 1).tot / 12; if (Math.abs(d) >= 1) E.push({k, tipo: 'leggi', d, assorbito: !inizio(k)}); });
+  E.sort((x, y) => x.k - y.k);
+  // bilancio: il netto concordato meno una busta che segue contratto e leggi partendo dalla prima cifra
+  let giusto = nc.P[0].T, saldo = 0;
+  for (let k = nc.P[0].da; k <= nc.fine; k++) { E.filter(e => e.k === k && e.tipo !== 'nuovo').forEach(e => giusto += e.d); saldo += nc.P.find(p => k >= p.da && k <= p.a).T - giusto; }
+  return {E, saldo};
+}
+// trasferte e rimborsi km dell'ultimo anno intero visti come stipendio: il lordo che darebbe lo stesso netto e cosa manca a pensione e TFR
+function costoRimborsi(nc, A){
+  const a = [...A].reverse().find(x => x.completo && x.L.some(b => b.azienda === nc.az)); if (!a) return null;
+  const H = a.L.filter(b => b.azienda === nc.az).reduce((s, b) => s + b.esenti, 0);
+  const netto = G => { const dR = G * (1 - 0.0919); return dR - (fiscoAnno(a.y, a.R).inTasca - fiscoAnno(a.y, a.R + dR).inTasca) - 0.023 * dR; };
+  let lo = 0, hi = H * 4; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; netto(m) < H ? lo = m : hi = m; }
+  const Gp = H / 1.37; // l'azienda paga sul lordo circa il 30% di contributi e il 7% di TFR
+  return {y: a.y, H, G: lo, Gp, nettoGp: netto(Gp)};
 }
 // quanto le regole dell'anno ry avrebbero lasciato in tasca rispetto a quelle vere, a parità di stipendio (anno intero)
 function effettoLeggi(a, ry){
@@ -2937,7 +2988,8 @@ async function vBuste(){
   <p class="note">La busta viene letta da Claude (2-3 centesimi), controlli i valori, poi va nel file BUSTE PAGA e il PDF nella cartella dell'anno. Il PDF arriva a Claude intero, con codice fiscale e IBAN, come le bollette.</p>
   ${errore ? `<p class="avviso">${ico('TriangleAlert')}<span>Non riesco a leggere BUSTE PAGA: ${esc(errore)}</span></p>` : ''}`;
   if (!B.length) return testa;
-  const A = anniBuste(B), ult = B.filter(b => b.tipo === 'mensile').pop() || B[B.length - 1], c = contiBusta(ult);
+  B = B.filter(b => b.tipo !== 'tfr'); // il TFR non si conta: quello di LUMI è stato liquidato a parte, quello di IB va al fondo pensione
+  const A = anniBuste(B), nc = nettoConcordato(B), ult = B.filter(b => b.tipo === 'mensile').pop() || B[B.length - 1], c = contiBusta(ult);
 
   // l'ultima busta, voce per voce
   const parti = [['netto', 'Netto', 'var(--bar-ok)'], ['contributi', 'Contributi INPS', 'var(--line-1)'], ['irpef', 'IRPEF', 'var(--bar-warn)'], ['add', 'Addizionali', 'var(--line-2)']].filter(([k]) => c[k] > 0);
@@ -2950,7 +3002,7 @@ async function vBuste(){
     <div class="list plain">${VOCI_BUSTA.filter(([k]) => Math.abs(c[k]) >= 1).map(([k, n, s]) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${s < 0 ? '− ' : ''}${n}</span><span class="num">${fmt(c[k])}</span></span>
       <span class="row-sub">${SPIEGA_BUSTA[k]}.</span></span></div>`).join('')}
       <div class="row"><span class="row-main"><span class="row-line"><span class="row-title"><b>Netto in busta</b></span><span class="num"><b>${fmt(ult.netto)}</b></span></span></span></div></div>
-    <p class="note" style="margin:8px 0 0">${ult.ferie_residue || ult.permessi_residui ? `Ti restano ${nf0.format(ult.ferie_residue)} ore di ferie e ${nf0.format(ult.permessi_residui)} di permessi. ` : ''}${ult.tfr_mese ? `TFR maturato nel mese ${fmt(ult.tfr_mese)}. ` : ''}${ult.welfare ? `Welfare aziendale ${fmt(ult.welfare)}, in beni e servizi, non nel netto.` : ''}</p>
+    <p class="note" style="margin:8px 0 0">${ult.ferie_residue || ult.permessi_residui ? `Ti restano ${nf0.format(ult.ferie_residue)} ore di ferie e ${nf0.format(ult.permessi_residui)} di permessi. ` : ''}${ult.welfare ? `Welfare aziendale ${fmt(ult.welfare)}, in beni e servizi, non nel netto.` : ''}</p>
   </section>`;
 
   // cosa è cambiato: anno in corso contro gli stessi mesi dell'anno prima, oppure l'ultimo anno intero contro il precedente
@@ -2968,10 +3020,10 @@ async function vBuste(){
   if (L1 && L1.length && L2.length) {
     const yy = L2[0].anno, aY = A.find(a => a.y === yy);
     const leggi = aY && aY.R ? effettoLeggi(aY, yy - 1).tot * (aY.completo ? 1 : L2.length / 12) : null, r5 = aY ? risparmio5(aY) : null;
-    const netti = [t1.netto - t1.esenti, t2.netto - t2.esenti];
+    const netti = [t1.netto - t1.r730, t2.netto - t2.r730];
     cambiato = `<h2 class="gh">Cosa è cambiato in un anno</h2>
     <div class="card"><p>${titolo}: hai preso <b class="num ${t2.netto >= t1.netto ? 'pos' : 'neg'}">${sgn(t2.netto - t1.netto)}</b> netti (${fmt(t2.netto)} contro ${fmt(t1.netto)}).</p>
-      <p class="muted" style="margin-top:8px">Senza rimborsi e trasferte lo stipendio netto è ${fmt(netti[1])} contro ${fmt(netti[0])}: ${sgn(netti[1] - netti[0])}.${leggi != null && Math.abs(leggi) >= 1 ? ` Le leggi nuove dell'anno valgono circa ${sgn(leggi)} di questa differenza.` : leggi != null ? ' Le leggi nuove dell\'anno non cambiano quasi niente al tuo reddito.' : ''}${r5 ? ` L'imposta al 5% sugli aumenti contrattuali (${fmt(r5.incr)} finora) ti fa risparmiare circa ${fmt(r5.risparmio)}.` : ''}</p></div>
+      <p class="muted" style="margin-top:8px">${t1.r730 || t2.r730 ? `Senza il 730, che riguarda le tasse dell'anno prima, ${fmt(netti[1])} contro ${fmt(netti[0])}: ${sgn(netti[1] - netti[0])}.` : ''}${leggi != null && Math.abs(leggi) >= 1 ? ` Le leggi nuove dell'anno valgono circa ${sgn(leggi)} di questa differenza.` : leggi != null ? ' Le leggi nuove dell\'anno non cambiano quasi niente al tuo reddito.' : ''}${r5 ? ` L'imposta al 5% sugli aumenti contrattuali (${fmt(r5.incr)} finora) ti fa risparmiare circa ${fmt(r5.risparmio)}.` : ''}</p></div>
     <div class="list">${VOCI_BUSTA.filter(([k]) => Math.abs(t1[k]) + Math.abs(t2[k]) >= 1).map(([k, n, s]) => { const d = t2[k] - t1[k], buono = d * s >= 0;
       return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${n}</span><span class="num ${Math.abs(d) < 1 ? 'muted' : buono ? 'pos' : 'neg'}">${sgn(d)}</span></span>
       <span class="row-sub num">${fmt(t2[k])} contro ${fmt(t1[k])}${t1[k] > 0 ? `, ${(d >= 0 ? '+' : '−') + nf0.format(Math.abs(d / t1[k] * 100))}%` : ''}</span></span></div>`; }).join('')}</div>
@@ -2993,9 +3045,9 @@ async function vBuste(){
     <div class="list">${righeLeggi}</div>
     <p class="note">Gli scaglioni non seguono l'inflazione: se il lordo sale solo per stare al passo coi prezzi, paghi comunque un po' di più. Le addizionali dipendono da regione e comune di residenza e non sono ricalcolate.</p>` : '';
 
-  // il netto contro l'inflazione (senza rimborsi, 730 e TFR)
+  // il netto contro l'inflazione: netto dell'anno col suo 730
   const interi = A.filter(a => a.completo && NIC[a.y]), yRif = Math.max(...Object.keys(NIC).map(Number));
-  const stip = a => a.tot.netto - a.tot.esenti - a.tot.r730;
+  const stip = a => nettoAnno(a, nc);
   let inflazione = '';
   if (interi.length >= 2) {
     const K = interi.map(a => a.y), primo = interi[0], ultimoA = interi[interi.length - 1];
@@ -3003,22 +3055,51 @@ async function vBuste(){
     const crescN = stip(ultimoA) / stip(primo) - 1, crescP = NIC[ultimoA.y] / NIC[primo.y] - 1;
     inflazione = `<h2 class="gh">Il netto contro l'inflazione</h2><div class="card">
       ${disegnaLinee(K, [{col:'var(--line-1)', nome:'Netto dell\'anno', v: interi.map(stip)}, {col:'var(--bar-ok)', nome:`In euro del ${ultimoA.y}`, v: interi.map(reale)}], k => String(k), 1)}
-      <p class="note" style="margin:8px 0 0">Dal ${primo.y} al ${ultimoA.y} lo stipendio netto è cresciuto del ${nf0.format(crescN * 100)}%, i prezzi del ${nf0.format(crescP * 100)}%: il potere d'acquisto è ${crescN > crescP ? 'salito' : 'sceso'} del ${nf0.format(Math.abs((1 + crescN) / (1 + crescP) - 1) * 100)}%. Prezzi: indice NIC dell'ISTAT${NIC_PROVVISORIO <= yRif ? `, il ${NIC_PROVVISORIO} è provvisorio` : ''}. Senza rimborsi, 730 e TFR.</p></div>`;
+      <p class="note" style="margin:8px 0 0">Dal ${primo.y} al ${ultimoA.y} lo stipendio netto è cresciuto del ${nf0.format(crescN * 100)}%, i prezzi del ${nf0.format(crescP * 100)}%: il potere d'acquisto è ${crescN > crescP ? 'salito' : 'sceso'} del ${nf0.format(Math.abs((1 + crescN) / (1 + crescP) - 1) * 100)}%. Prezzi: indice NIC dell'ISTAT${NIC_PROVVISORIO <= yRif ? `, il ${NIC_PROVVISORIO} è provvisorio` : ''}. Il netto comprende ${nc ? 'trasferte e rimborsi km del netto concordato e ' : ''}il 730 dell'anno dei redditi${ultimoA.noto730 ? '' : ` (per il ${ultimoA.y} quello arrivato finora)`}.</p></div>`;
   }
 
   // anno per anno
   const perAnno = `<h2 class="gh">Anno per anno</h2><div class="list">${[...A].reverse().map(a => { const t = a.tot, tolto = t.contributi + t.irpef + t.add + t.altro - t.bonus;
-    const tfrL = B.filter(b => b.anno === a.y && b.tipo === 'tfr');
-    return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${a.y} <span class="muted" style="font-size:13px">${a.mensili.length === 1 ? '1 mese' : a.mensili.length + ' mesi'}</span></span><span class="num">${fmt(t.netto)}</span></span>
-      <span class="row-sub num">Lordo ${fmt(t.lordo)}, trattenuto ${t.lordo ? nf0.format(tolto / t.lordo * 100) : 0}% fra contributi e tasse${t.esenti ? `, rimborsi ${fmt(t.esenti)}` : ''}. Paga contrattuale ${fmt(a.ultima ? a.ultima.retribuzione_mensile : 0)} al mese, ${esc(nomeAzienda(a.ultima ? a.ultima.azienda : ''))}.${a.tfr ? ` TFR maturato ${fmt(a.tfr)}.` : ''}${tfrL.length ? ` TFR liquidato netto ${fmt(tfrL.reduce((s, b) => s + b.netto, 0))}, fuori da questi conti.` : ''}</span></span></div>`; }).join('')}</div>
-    <p class="note">Il netto comprende rimborsi e trasferte. Anni con pochi mesi non sono confrontabili per il totale.</p>`;
+    const v730 = Math.abs(a.q730) >= 1 ? ` 730 sui redditi dell'anno ${sgn(a.q730)}, arrivato nel ${a.y + 1}${a.noto730 ? '' : ' (finora)'}.` : '';
+    return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${a.y} <span class="muted" style="font-size:13px">${a.mensili.length === 1 ? '1 mese' : a.mensili.length + ' mesi'}</span></span><span class="num">${fmt(t.netto - t.r730 + a.q730)}</span></span>
+      <span class="row-sub num">In busta ${fmt(t.netto)}${Math.abs(t.r730) >= 1 ? `, di cui 730 dell'anno prima ${sgn(t.r730)}` : ''}.${v730} Lordo ${fmt(t.lordo)}, trattenuto ${t.lordo ? nf0.format(tolto / t.lordo * 100) : 0}% fra contributi e tasse${t.esenti ? `, trasferte e rimborsi km ${fmt(t.esenti)}` : ''}. Paga contrattuale ${fmt(a.ultima ? a.ultima.retribuzione_mensile : 0)} al mese, ${esc(nomeAzienda(a.ultima ? a.ultima.azienda : ''))}.</span></span></div>`; }).join('')}</div>
+    <p class="note">Il totale è il netto in busta con il 730 spostato all'anno dei redditi a cui si riferisce. Il TFR non c'è: quello di LUMI è stato liquidato a parte, quello di IB va al fondo pensione. Anni con pochi mesi non sono confrontabili.</p>`;
+
+  // il netto concordato: chi ha preso aumenti e leggi nuove, e cosa costa la parte pagata in rimborsi
+  let concordato = '';
+  if (nc) {
+    const {E, saldo} = eventiConcordato(nc, A), cr = costoRimborsi(nc, A), cifre = nc.P.map(p => `${eur0(p.T)} da ${nomeMese(p.da)}`).join(', ');
+    const alMese = v => `${v > 0 ? '+' : '−'}${eur0(Math.abs(v))} al mese`;
+    const riga = e => {
+      const quando = frase(nomeMese(e.k)), T = (nc.P.find(p => p.da === e.k) || {}).T;
+      if (e.tipo === 'nuovo') return [quando, alMese(e.d), e.d > 0 ? 'pos' : 'neg', `Netto concordato da ${eur0(T - e.d)} a ${eur0(T)}, cambiato con l'azienda.`];
+      if (e.tipo === 'aumento') return [quando, e.assorbito ? alMese(-e.d) : 'compreso', e.assorbito ? 'neg' : 'muted',
+        `Aumento del contratto, +${fmt(e.dG)} lordi: ${e.assorbito ? `circa ${eur0(e.d)} netti al mese, ma il netto è rimasto uguale e li ha tenuti l'azienda.` : 'arrivato insieme al nuovo netto concordato.'}`];
+      return [quando, e.assorbito ? alMese(-e.d) : 'compreso', e.assorbito ? (e.d > 0 ? 'neg' : 'pos') : 'muted',
+        e.d > 0 ? `Leggi nuove: ti lasciavano circa ${eur0(e.d)} al mese in più, ma col netto fisso li ha tenuti l'azienda.` : `Leggi nuove: ti toglievano circa ${eur0(-e.d)} al mese, ma col netto fisso ce li ha messi l'azienda.`];
+    };
+    const voce = (t, v, cl, sub) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${t}</span><span class="num ${cl}">${v}</span></span><span class="row-sub">${sub}</span></span></div>`;
+    concordato = `<h2 class="gh">Il netto concordato</h2>
+    <div class="card"><p>In ${esc(nomeAzienda(nc.az))} il netto senza straordinari è una cifra fissa: ${cifre}. Lo stipendio vero è più basso: trasferte e rimborsi km coprono la differenza ogni mese.</p>
+      <p class="muted" style="margin-top:8px">Con il netto fisso, quello che lo stipendio guadagna con un aumento del contratto o con una legge nuova lo incassa l'azienda, perché i rimborsi scendono della stessa cifra. Quando lo stipendio perde, la differenza ce la mette l'azienda. Gli straordinari invece ti arrivano in più.</p></div>
+    <div class="list">${E.map(e => voce(...riga(e))).join('')}</div>
+    <div class="card" style="margin-top:16px"><p>Da ${nomeMese(nc.P[0].da)} ${aD(nomeMese(nc.fine))} hai preso circa <b class="num ${saldo >= 0 ? 'pos' : 'neg'}">${eur0(Math.abs(saldo))}</b> ${saldo >= 0 ? 'in più' : 'in meno'} di una busta che segue gli aumenti del contratto e le leggi.</p>
+      <p class="muted" style="margin-top:8px">Da qui in avanti ogni aumento del contratto e ogni taglio delle tasse resta all'azienda finché la cifra non si rinegozia: conviene ridiscuterla ogni volta che arriva un aumento del contratto nazionale.</p></div>
+    ${cr ? `<div class="card" style="margin-top:16px"><p>Nel ${cr.y} trasferte e rimborsi km sono stati <b class="num">${eur0(cr.H)}</b>: su questi soldi non ci sono contributi per la pensione né TFR.</p>
+      <div class="list plain" style="margin-top:8px">
+        ${voce('Pensione', `${eur0(cr.G * 0.33)} l'anno`, 'neg', `I contributi di uno stipendio che ti lascerebbe gli stessi soldi (${eur0(cr.G)} lordi): circa ${eur0(cr.G * 0.33 * 0.056)} l'anno di pensione in meno per ogni anno così.`)}
+        ${voce('TFR al fondo pensione', `${eur0(cr.G * 0.0691)} l'anno`, 'neg', 'Il 6,91% dello stesso lordo.')}
+        ${voce('Per l\'azienda', `${eur0(cr.G * 1.37 - cr.H)} l'anno`, '', `Quanto spenderebbe in più per darti lo stesso netto in stipendio vero. Spendendo come oggi, il lordo sarebbe ${eur0(cr.Gp)}, con ${eur0(cr.Gp * 0.33)} di contributi, ma a te resterebbero ${eur0(cr.nettoGp)} invece di ${eur0(cr.H)}.`)}
+      </div></div>
+    <p class="note">Malattia, infortunio, disoccupazione (NASpI), congedi e richieste di prestito guardano allo stipendio vero, non ai rimborsi. In un controllo, rimborsi senza viaggi veri possono diventare stipendio: l'azienda deve contributi e sanzioni, e le tasse non trattenute possono essere chieste anche a te. Per un parere fai vedere le buste a un patronato o a un consulente del lavoro, e scarica l'estratto conto contributivo dal sito INPS. Sono stime con le regole fiscali di questa pagina: pensione al 5,6% dei contributi (67 anni), addizionali al 2,3%, contributi dell'azienda al 30%.</p>` : ''}`;
+  }
 
   // tutte le buste
   const tutte = `<h2 class="gh">Tutte</h2><div class="list">${[...B].reverse().slice(0, 40).map(b => `<button class="row" onclick="apriBusta(${b.anno},${b.mese},'${b.tipo}')"><span class="row-main"><span class="row-line"><span class="row-title">${nomeBusta(b)}</span><span class="num">${fmt(b.netto)}</span></span>
       <span class="row-sub num">Lordo ${fmt(b.totale_competenze)}, ${esc(nomeAzienda(b.azienda))}</span></span>${chev()}</button>`).join('')}</div>
     ${B.length > 40 ? `<p class="note">Le altre ${B.length - 40} sono nel file BUSTE PAGA.</p>` : ''}`;
 
-  return testa + `<div class="cols"><div>${ultima}${inflazione}${perAnno}</div><div>${cambiato}${leggiSez}${tutte}</div></div>`;
+  return testa + `<div class="cols"><div>${ultima}${concordato}${inflazione}</div><div>${cambiato}${leggiSez}${perAnno}${tutte}</div></div>`;
 }
 function dopoBuste(){
   const z = $('#dropBusta'); if (!z) return;
