@@ -72,6 +72,23 @@ const SYSTEM_BOLLETTA = `Leggi una bolletta italiana di luce e/o gas (PDF o foto
 - fattura: numero, data_emissione e scadenza (AAAA-MM-GG), totale_da_pagare della bolletta intera, fornitore.
 - Numeri come sono stampati, senza arrotondare. leggibile = false se non è una bolletta di luce o gas.`;
 
+const SYSTEM_BUSTA = `Leggi una busta paga italiana (cedolino di un lavoratore dipendente: mensilità, tredicesima, quattordicesima o liquidazione del TFR) e compila lo schema. In euro, numeri come sono stampati, senza arrotondare; 0 se la voce non c'è.
+- tipo: mensile, tredicesima, quattordicesima, tfr (liquidazione di fine rapporto) o altro. mese e anno: il periodo di retribuzione (per la tredicesima di solito dicembre).
+- azienda, ccnl, livello, qualifica come stampati; retribuzione_mensile: la retribuzione mensile contrattuale ("Retribuzione mensile", "Retr. di fatto"); ore_lavorate del mese.
+- totale_competenze, totale_trattenute, netto ("Netto in busta"). arrotondamenti: arrotondamento attuale meno precedente. Controlla che totale_competenze - totale_trattenute + arrotondamenti = netto.
+- imponibile_contributivo del mese e contributi_dipendente (contributi INPS e altri contributi a carico del dipendente del mese, solo la parte trattenuta al lavoratore).
+- imponibile_irpef del mese, irpef_lorda, detrazioni_lavoro (detrazione per lavoro dipendente del mese), irpef_netta del mese (prima di conguagli e addizionali).
+- bonus_irpef: credito in busta che aumenta il netto ("Credito art.1 DL 66/2014" cioè bonus 80 €, "Trattamento integrativo", "Ulteriore detrazione" o "Somma esente/indennità" del cuneo fiscale); va anche in voci. esonero_contributivo: lo sconto sui contributi del dipendente se è stampato come voce ("Esonero contributivo", "taglio cuneo"), altrimenti 0.
+- addizionale_regionale e addizionale_comunale: quanto trattenuto nel mese (rate dell'anno precedente e acconto insieme).
+- conguaglio_irpef: conguaglio fiscale di fine anno o di fine rapporto del mese, positivo se rimborsato, negativo se trattenuto; rimborso_730: rimborso o trattenuta da 730 (positivo se rimborsato).
+- esenti: somme non tassate pagate in busta (trasferte, rimborsi chilometrici, rimborsi spese). welfare: beni e servizi welfare o fringe benefit indicati (non pagati in denaro). straordinari: compensi per lavoro straordinario del mese.
+- tfr_mese: TFR maturato nel mese; per tipo tfr anche tfr_liquidato (lordo) e la sua imposta in irpef_netta.
+- ferie_residue e permessi_residui: ore residue totali (ROL ed ex festività insieme nei permessi); in giorni moltiplica per 8.
+- voci: tutte le righe di competenze e trattenute del corpo del cedolino (codice, descrizione come stampata, importo positivo se competenza, negativo se trattenuta). Esclude righe solo informative senza importo.
+- leggi: riferimenti a leggi stampati nelle voci ("DL 66/2014", "L.199/25"), come scritti.
+- anno_*: i progressivi dell'anno stampati sul cedolino (sezione "ANNO" o "progressivi"): imponibile fiscale, IRPEF lorda, detrazioni per lavoro dipendente, IRPEF netta, imponibile contributivo e contributi dell'anno; 0 se non ci sono.
+- leggibile = false se non è una busta paga.`;
+
 const oggetto = (props) => ({ type: "object", properties: props, required: Object.keys(props), additionalProperties: false });
 const schemaScontrino = (cats) => oggetto({
   leggibile: { type: "boolean" },
@@ -124,6 +141,20 @@ const schemaBolletta = () => oggetto({
     indice: { type: "number" }, indice_nome: { type: "string", enum: ["PSV", "PUN", ""] },
   }) },
 });
+const num = { type: "number" };
+const schemaBusta = () => oggetto({
+  leggibile: { type: "boolean" }, tipo: { type: "string", enum: ["mensile", "tredicesima", "quattordicesima", "tfr", "altro"] },
+  mese: { type: "integer" }, anno: { type: "integer" }, azienda: { type: "string" }, ccnl: { type: "string" }, livello: { type: "string" }, qualifica: { type: "string" },
+  retribuzione_mensile: num, ore_lavorate: num, totale_competenze: num, totale_trattenute: num, arrotondamenti: num, netto: num,
+  imponibile_contributivo: num, contributi_dipendente: num, imponibile_irpef: num, irpef_lorda: num, detrazioni_lavoro: num, irpef_netta: num,
+  bonus_irpef: num, esonero_contributivo: num, addizionale_regionale: num, addizionale_comunale: num, conguaglio_irpef: num, rimborso_730: num,
+  esenti: num, welfare: num, straordinari: num, tfr_mese: num, tfr_liquidato: num, ferie_residue: num, permessi_residui: num,
+  voci: { type: "array", items: oggetto({ codice: { type: "string" }, descrizione: { type: "string" }, importo: num }) },
+  leggi: { type: "array", items: { type: "string" } },
+  anno_imponibile_irpef: num, anno_irpef_lorda: num, anno_detrazioni_lavoro: num, anno_irpef_netta: num, anno_imponibile_contributivo: num, anno_contributi: num,
+});
+// dati personali che non servono alla lettura: codice fiscale e IBAN restano fuori dal testo mandato a Claude
+const togliPersonali = (t) => t.replace(/\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/g, "[CF]").replace(/\bIT\s?\d{2}\s?[A-Z](?:\s?[0-9A-Z]){22}\b/g, "[IBAN]");
 // le categorie del bilancio arrivano dall'app: solo testo breve, senza doppioni
 const pulisciCategorie = (a) => [...new Set((Array.isArray(a) ? a : []).map(c => String(c).slice(0, 60).trim()).filter(Boolean))].slice(0, 80);
 const elenco = (a, max) => (Array.isArray(a) ? a : []).map(x => String(x).slice(0, 200)).slice(0, max).join("\n");
@@ -177,6 +208,15 @@ async function bolletta(body, env) {
   if (!parti || !parti.length) throw new ErroreLettura("Manca la bolletta.");
   if (body.tipo === "immagini" && parti.length > 1) parti.push({ type: "text", text: "Le foto sono pagine della stessa bolletta, in ordine." });
   return leggi(env, SYSTEM_BOLLETTA, parti, schemaBolletta(), "low", 8000);
+}
+
+// buste paga: PDF o testo già estratto
+async function busta(body, env) {
+  let parti;
+  if (body.tipo === "pdf" && typeof body.dati === "string" && body.dati) parti = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: body.dati } }];
+  else if (body.tipo === "testo" && typeof body.dati === "string" && body.dati.trim()) parti = [{ type: "text", text: "TESTO DELLA BUSTA PAGA:\n" + togliPersonali(body.dati.slice(0, MAX_DATI)) }];
+  if (!parti) throw new ErroreLettura("Manca la busta paga.");
+  return leggi(env, SYSTEM_BUSTA, parti, schemaBusta(), "low", 8000);
 }
 
 // estratti in tabella: l'app legge le colonne da sola e manda qui solo i movimenti da aggiungere
@@ -255,7 +295,7 @@ export default {
     try { body = await req.json(); } catch { return risposta("Richiesta non valida", 400, h); }
 
     const percorso = new URL(req.url).pathname;
-    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza, "/uniforma": uniforma, "/bolletta": bolletta };
+    const lettori = { "/scontrino": scontrino, "/estratto": estratto, "/categorizza": categorizza, "/uniforma": uniforma, "/bolletta": bolletta, "/busta": busta };
     if (lettori[percorso]) {
       const json = (o, stato) => new Response(JSON.stringify(o), { status: stato, headers: { ...h, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
       try { return json(await lettori[percorso](body, env), 200); }

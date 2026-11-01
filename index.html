@@ -157,7 +157,7 @@ select.field{appearance:none;-webkit-appearance:none;direction:rtl;cursor:pointe
 .chart{width:100%;height:auto;display:block;overflow:visible}
 .chart text{fill:var(--text-2);font-size:11px;font-family:var(--font)}
 .chart .sel text{fill:var(--text);font-weight:600}
-.key{display:flex;gap:var(--s2);font-size:13px;color:var(--text-2);margin-top:var(--s1)}
+.key{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s2);font-size:13px;color:var(--text-2);margin-top:var(--s1)}
 .key span{display:flex;align-items:center;gap:var(--s1)}
 .key i{display:block;width:16px;height:2px;border-radius:1px;background:var(--c)}
 .hbar{display:grid;grid-template-columns:1fr auto;column-gap:var(--s2);padding:var(--s1) var(--s2);width:100%;text-align:left}
@@ -800,6 +800,7 @@ const VIEWS = {
   anni:{t:'Negli anni',r:vAnni,parent:'analisi'},
   bollette:{t:'Bollette',r:vBollette,parent:'analisi',after:dopoBollette},
   bolletteDati:{t:'Dentro le bollette',r:vBolletteDati,parent:'bollette'},
+  buste:{t:'Buste paga',r:vBuste,parent:'analisi',after:dopoBuste},
   uniforma:{t:'Uniforma',r:vUniforma,parent:'analisi',w:'stretto'},
   estratto:{t:'Estratto conto',r:vEstratto,parent:'analisi',w:'stretto'},
   scontrini:{t:'Scontrini',r:vScontrini,parent:'analisi',after:dopoScontrini,w:'stretto'},
@@ -889,7 +890,7 @@ function drawSide(){
     <button class="btn" onclick="openAdd()" title="Nuova voce (tasto N)" aria-keyshortcuts="N">${ico('Plus')}Nuova voce</button>
     ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
     <h3>Analisi</h3>
-    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('anni','History','Negli anni')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}${it('bollette','Zap','Bollette')}
+    ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('anni','History','Negli anni')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}${it('bollette','Zap','Bollette')}${it('buste','Briefcase','Buste paga')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}
     <h3>Importa</h3>
     ${it('estratto','FileUp','Estratto conto')}${it('scontrini','ReceiptText','Scontrini')}${it('prezzi','ChartLine','Prezzi')}
@@ -1239,6 +1240,8 @@ async function vAnalisi(){
   <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('anni','History','Negli anni','')}${r('salute','Activity','Salute finanziaria',vS)}${r('uniforma','Combine','Uniforma le voci','')}</div></section>
   <section class="blocco"><h2 class="gh">Spese da seguire</h2>
   <div class="list">${r('casa','House','Casa',vC)}${r('bollette','Zap','Bollette di luce e gas','')}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
+  <section class="blocco"><h2 class="gh">Entrate</h2>
+  <div class="list">${r('buste','Briefcase','Buste paga','')}</div></section>
   <section class="blocco"><h2 class="gh">Importa</h2>
   <div class="list">${r('estratto','FileUp','Estratto conto','')}${r('scontrini','ReceiptText','Scontrini',SC.some(x=>x.stato==='pronto')?'da rivedere':'')}${r('prezzi','ChartLine','Prezzi e inflazione','')}</div></section>
   <section class="blocco"><h2 class="gh">App</h2>
@@ -2778,7 +2781,7 @@ function graficoBollette(L, tipo){
   return disegnaLinee(K, serie.map(([ut, col, f, nome]) => ({col, nome, v: K.map(k => val(ut, k, f))})));
 }
 // linee mese per mese: K sono i mesi (anno*12+mese-1), dati [{col, nome, v:[...]}] con null dove manca il valore
-function disegnaLinee(K, dati){
+function disegnaLinee(K, dati, etichetta = k => mese(k % 12).slice(0, 3).toLowerCase(), ogni = 2){
   const W = 344, H = 184, Lm = 48, B = 24, T = 8, w = W - Lm, h = H - B - T;
   const tutti = dati.flatMap(d => d.v.filter(x => x != null)), mx = Math.max(...tutti, 0.0001);
   const dec = mx < 2 ? 2 : 0, step = mx / 4, top = mx * 1.1;
@@ -2790,9 +2793,309 @@ function disegnaLinee(K, dati){
     s += `<path d="${p}" fill="none" stroke="${d.col}" stroke-width="1.75" stroke-linejoin="round"/>`;
     d.v.forEach((v, i) => { if (v != null) s += `<circle cx="${X(i).toFixed(1)}" cy="${Yp(v).toFixed(1)}" r="2.5" fill="var(--card)" stroke="${d.col}" stroke-width="1.5"/>`; });
   });
-  K.forEach((k, i) => { if (i % 2 === 0) s += `<text x="${X(i)}" y="${H-4}" text-anchor="middle">${mese(k % 12).slice(0, 3).toLowerCase()}</text>`; });
+  K.forEach((k, i) => { if (i % ogni === 0) s += `<text x="${X(i)}" y="${H-4}" text-anchor="middle">${etichetta(k)}</text>`; });
   return s + `</svg><div class="key">${dati.map(d => `<span style="--c:${d.col}"><i></i>${d.nome}</span>`).join('')}</div>`;
 }
+// ── BUSTE PAGA: cedolini letti da Claude, nel file BUSTE PAGA.xlsx della cartella 010-LAVORO/BUSTE PAGA (TblBuste e TblVociBuste)
+// ── regole fiscali del lavoro dipendente 2018-2026 (verificate sulle fonti il 01/11/2026; dopo il 2026 valgono quelle del 2026)
+// IRPEF e detrazioni: TUIR art. 11 e 13; bonus 80 € DL 66/2014; trattamento integrativo e ulteriore detrazione DL 3/2020; riforma L. 234/2021 e D.Lgs. 216/2023;
+// esonero contributivo L. 234/2021, DL 115/2022, L. 197/2022, DL 48/2023, L. 213/2023; cuneo fiscale L. 207/2024; secondo scaglione al 33% L. 199/2025
+const SCAGLIONI = { vecchi: [[15000, .23], [28000, .27], [55000, .38], [75000, .41], [Infinity, .43]], r2022: [[15000, .23], [28000, .25], [50000, .35], [Infinity, .43]],
+  r2024: [[28000, .23], [50000, .35], [Infinity, .43]], r2026: [[28000, .23], [50000, .33], [Infinity, .43]] };
+const annoRegole = y => Math.min(Math.max(y, 2018), 2026);
+function irpefLorda(y, R){
+  y = annoRegole(y); const S = y <= 2021 ? SCAGLIONI.vecchi : y <= 2023 ? SCAGLIONI.r2022 : y <= 2025 ? SCAGLIONI.r2024 : SCAGLIONI.r2026;
+  let t = 0, da = 0; for (const [a, p] of S) { if (R > da) t += (Math.min(R, a) - da) * p; da = a; } return t;
+}
+// detrazione per lavoro dipendente, annua
+function detrLavoro(y, R){
+  y = annoRegole(y);
+  if (y <= 2021) return R <= 8000 ? 1880 : R <= 28000 ? 978 + 902 * (28000 - R) / 20000 : R <= 55000 ? 978 * (55000 - R) / 27000 : 0;
+  const d = R <= 15000 ? (y >= 2024 ? 1955 : 1880) : R <= 28000 ? 1910 + 1190 * (28000 - R) / 13000 : R <= 50000 ? 1910 * (50000 - R) / 22000 : 0;
+  return d + (R > 25000 && R <= 35000 ? 65 : 0);
+}
+// misure per il lavoro dipendente: credito in busta (80 €, trattamento integrativo), ulteriore detrazione, somma esente (non tassata)
+function misureFiscali(y, R, lorda, detr){
+  y = annoRegole(y); const m = {credito: 0, ulteriore: 0, esente: 0}, capiente = lorda > detr;
+  const b80 = R > 8174 && R <= 24600 ? 960 : R > 24600 && R <= 26600 ? 960 * (26600 - R) / 2000 : 0;
+  const ult21 = R > 28000 && R <= 35000 ? 960 + 240 * (35000 - R) / 7000 : R > 35000 && R <= 40000 ? 960 * (40000 - R) / 5000 : 0;
+  if (y <= 2019) m.credito = capiente ? b80 : 0;
+  else if (y === 2020) { m.credito = (capiente ? b80 / 2 : 0) + (capiente && R <= 28000 ? 600 : 0); m.ulteriore = ult21 / 2; }
+  else if (y === 2021) { m.credito = capiente && R <= 28000 ? 1200 : 0; m.ulteriore = ult21; }
+  else m.credito = capiente && R <= 15000 ? 1200 : 0;
+  if (y >= 2025) {
+    if (R <= 20000) m.esente = R * (R <= 8500 ? .071 : R <= 15000 ? .053 : .048);
+    else m.ulteriore = R <= 32000 ? 1000 : R <= 40000 ? 1000 * (40000 - R) / 8000 : 0;
+  }
+  return m;
+}
+// esonero sui contributi del dipendente (quota IVS), in percentuale dell'imponibile del mese
+function esoneroPct(y, m, imp, tredicesima){
+  if (y === 2022) return imp <= 2692 ? (m >= 7 ? .02 : .008) : 0;
+  if (y === 2023) return imp <= 1923 ? (m >= 7 && !tredicesima ? .07 : .03) : imp <= 2692 ? (m >= 7 && !tredicesima ? .06 : .02) : 0;
+  if (y === 2024) return tredicesima ? 0 : imp <= 1923 ? .07 : imp <= 2692 ? .06 : 0;
+  return 0;
+}
+function fiscoAnno(ry, R){
+  const lorda = irpefLorda(ry, R), detr = detrLavoro(ry, R), m = misureFiscali(ry, R, lorda, detr), netta = Math.max(0, lorda - detr - m.ulteriore);
+  return {lorda, detr, netta, ...m, inTasca: m.credito + m.esente - netta};
+}
+const LEGGI_ANNO = {
+  2019: 'Bonus da 80 € al mese per redditi fra 8.174 e 26.600 € (DL 66/2014).',
+  2020: 'Da luglio il bonus da 80 € diventa trattamento integrativo da 100 €, fino a 28.000 € (DL 3/2020).',
+  2021: 'Trattamento integrativo da 100 € per tutto l\'anno.',
+  2022: 'Riforma IRPEF: quattro scaglioni, nuove detrazioni, trattamento integrativo solo fino a 15.000 € (L. 234/2021). Esonero sui contributi dello 0,8%, del 2% da luglio (DL 115/2022).',
+  2023: 'Esonero sui contributi del 2-3%, del 6-7% da luglio (L. 197/2022, DL 48/2023).',
+  2024: 'Primi due scaglioni uniti al 23% fino a 28.000 € (D.Lgs. 216/2023). Esonero del 6-7% confermato, ma non sulla tredicesima (L. 213/2023).',
+  2025: 'Il taglio dei contributi diventa fiscale: somma esente fino a 20.000 €, ulteriore detrazione di 1.000 € fra 20.000 e 40.000 € (L. 207/2024).',
+  2026: 'Secondo scaglione dal 35% al 33% fra 28.000 e 50.000 €. Imposta del 5% sugli aumenti dei rinnovi contrattuali per chi nel 2025 non ha superato 33.000 € (L. 199/2025).' };
+// prezzi al consumo NIC (ISTAT), 2018 = 100, dalle medie annue: 2019 +0,6%, 2020 −0,2%, 2021 +1,9%, 2022 +8,1%, 2023 +5,7%, 2024 +1,0%, 2025 +1,5%;
+// 2026: +3,1% acquisito a settembre, provvisorio
+const NIC = {2018: 100, 2019: 100.6, 2020: 100.4, 2021: 102.3, 2022: 110.6, 2023: 116.9, 2024: 118.1, 2025: 119.8, 2026: 123.5};
+const NIC_PROVVISORIO = 2026;
+
+const COL_BUSTE = ['anno','mese','tipo','azienda','ccnl','livello','qualifica','retribuzione_mensile','ore_lavorate','totale_competenze','totale_trattenute','netto','imponibile_contributivo','contributi_dipendente',
+  'imponibile_irpef','irpef_lorda','detrazioni_lavoro','irpef_netta','bonus_irpef','esonero_contributivo','addizionale_regionale','addizionale_comunale','conguaglio_irpef','rimborso_730','esenti','welfare',
+  'straordinari','tfr_mese','tfr_liquidato','ferie_residue','permessi_residui','anno_imponibile_irpef','anno_irpef_lorda','anno_detrazioni_lavoro','anno_irpef_netta','anno_imponibile_contributivo','anno_contributi',
+  'leggi','file','accredito','note'];
+const TESTO_BUSTE = new Set(['tipo','azienda','ccnl','livello','qualifica','leggi','file','accredito','note']);
+const cartellaBuste = () => cartellaFile().replace(/006-COSTI E SPESE.*$/, '') + '010-LAVORO/BUSTE PAGA';
+let _fileBuste = null, busteCache = null, BP = { fase:'scelta' };
+async function idFileBuste(){
+  if (!_fileBuste) _fileBuste = (await apiGet(`/me/drive/root:/${percorsoGraph(cartellaBuste() + '/BUSTE PAGA.xlsx')}`)).id;
+  return _fileBuste;
+}
+const ordineBusta = b => b.anno * 100 + b.mese + (b.tipo === 'mensile' ? 0 : .5);
+async function getBuste(){
+  if (busteCache) return busteCache;
+  const id = await idFileBuste();
+  const [r, v] = await Promise.all([apiGet(`/me/drive/items/${id}/workbook/tables/TblBuste/rows`), apiGet(`/me/drive/items/${id}/workbook/tables/TblVociBuste/rows`).catch(() => ({value:[]}))]);
+  const voci = {}; (v.value||[]).forEach(x => { const w = x.values[0], k = `${+w[0]}-${+w[1]}-${w[2]}`; (voci[k] = voci[k] || []).push({codice:String(w[3]), descrizione:String(w[4]), importo:+w[5]||0}); });
+  busteCache = (r.value||[]).map(x => { const o = {}; COL_BUSTE.forEach((k, i) => { const c = x.values[0][i]; o[k] = TESTO_BUSTE.has(k) ? String(c == null ? '' : c) : +c || 0; }); o.voci = voci[`${o.anno}-${o.mese}-${o.tipo}`] || []; return o; })
+    .filter(b => b.anno && b.mese).sort((a, b) => ordineBusta(a) - ordineBusta(b));
+  return busteCache;
+}
+// una busta divisa in modo che torni sempre col netto: lordo + rimborsi + bonus in busta + 730 − contributi − IRPEF − addizionali = netto
+// l'IRPEF è il resto: ritenute, conguagli, arrotondamenti e piccole trattenute. Le righe "ulteriore detrazione" di alcuni cedolini sono informative, non soldi;
+// nei cedolini vecchi le ore di ferie e feste godute sono sia in competenze sia in trattenute ("Tratt ore assenza") e le addizionali "dovute" sono solo il totale dell'anno
+const BONUS_CASSA = /credito art|trattamento integrativo|eson/i, DOPPIE = /^tratt|trattenuta ex|tratt\.? ore/i, ADDIZ = /addiz|add\.?\s?(reg|com)/i;
+const somma = (V, f) => V.reduce((s, v) => s + (f(v) ? Math.abs(v.importo) : 0), 0);
+function contiBusta(b){
+  const V = b.voci, bonus = somma(V, v => v.importo > 0 && BONUS_CASSA.test(v.descrizione)) || (b.anno <= 2021 ? b.bonus_irpef : 0);
+  const doppie = somma(V, v => v.importo < 0 && DOPPIE.test(v.descrizione));
+  const addV = V.filter(v => v.importo < 0 && ADDIZ.test(v.descrizione) && !/dovut/i.test(v.descrizione));
+  const add = addV.length ? somma(addV, () => true) : b.addizionale_regionale + b.addizionale_comunale, r730 = Math.max(0, b.rimborso_730), comp = b.totale_competenze - doppie;
+  // lordo: l'imponibile contributivo stampato (il 730 sta in competenze in un formato e fuori nell'altro); il resto va in "altro" così la somma torna col netto
+  const lordo = b.imponibile_contributivo || comp - b.esenti - bonus - r730, irpef = comp - b.contributi_dipendente - add - b.netto;
+  return {lordo, esenti: b.esenti, bonus, r730, contributi: b.contributi_dipendente, add, irpef, altro: lordo + b.esenti + bonus + r730 - comp, netto: b.netto};
+}
+const VOCI_BUSTA = [['lordo', 'Retribuzione lorda', 1], ['esenti', 'Rimborsi e trasferte', 1], ['bonus', 'Bonus e sconti in busta', 1], ['r730', 'Rimborsi del 730', 1], ['contributi', 'Contributi INPS', -1], ['irpef', 'IRPEF', -1], ['add', 'Addizionali', -1], ['altro', 'Conguagli e altre trattenute', -1]];
+const SPIEGA_BUSTA = { lordo: 'Stipendio, straordinari, ferie e permessi pagati, tredicesima', esenti: 'Trasferte e rimborsi chilometrici: non sono tassati e ripagano spese che hai già fatto',
+  bonus: 'Bonus da 80 €, trattamento integrativo da 100 € o esonero sui contributi pagato come riga a parte', r730: 'Tasse degli anni prima che ti tornano', contributi: 'Per la pensione: il 9,19% del lordo, meno l\'esonero quando c\'era',
+  irpef: 'Imposta sul reddito, già al netto delle detrazioni', add: 'Addizionali regionale e comunale dell\'anno prima, a rate',
+  altro: 'Conguagli, fondi, benefit e arrotondamenti: la differenza che serve perché la somma torni col netto' };
+function sommaConti(L){ const t = {lordo:0, esenti:0, bonus:0, r730:0, contributi:0, add:0, irpef:0, altro:0, netto:0}; L.forEach(b => { const c = contiBusta(b); for (const k in t) t[k] += c[k]; }); return t; }
+// un anno di buste: somme, reddito imponibile dai progressivi, quanto è completo
+function anniBuste(B){
+  return [...new Set(B.map(b => b.anno))].sort().map(y => {
+    const L = B.filter(b => b.anno === y && b.tipo !== 'tfr'), mensili = L.filter(b => b.tipo === 'mensile'), fine = L.filter(b => b.anno_imponibile_irpef);
+    const completo = new Set(mensili.map(b => b.mese)).size >= 12, ultima = mensili[mensili.length - 1] || L[L.length - 1];
+    let R = fine.length ? fine.reduce((s, b) => s + b.anno_imponibile_irpef, 0) : L.reduce((s, b) => s + b.imponibile_irpef, 0);
+    const fattore = completo || !mensili.length ? 1 : 12 / mensili.length;
+    // anno in corso: reddito portato a 12 mesi, più la tredicesima (una retribuzione mensile meno i contributi)
+    const Rann = completo ? R : R * fattore + (ultima ? ultima.retribuzione_mensile * 0.9 : 0);
+    // anno finito: l'IRPEF è quella definitiva dei progressivi, il resto va nei conguagli
+    const tot = sommaConti(L), irpefAnno = fine.reduce((s, b) => s + b.anno_irpef_netta, 0);
+    if (completo && fine.length) { tot.altro += tot.irpef - irpefAnno; tot.irpef = irpefAnno; }
+    return {y, L, mensili, completo, ultima, R, Rann, fattore, tot, tfr: B.filter(b => b.anno === y).reduce((s, b) => s + b.tfr_mese, 0)};
+  }).filter(a => a.L.length);
+}
+// quanto le regole dell'anno ry avrebbero lasciato in tasca rispetto a quelle vere, a parità di stipendio (anno intero)
+function effettoLeggi(a, ry){
+  const es = yy => a.L.reduce((s, b) => s + b.imponibile_contributivo * esoneroPct(yy, b.mese, b.imponibile_contributivo, b.tipo === 'tredicesima'), 0) * a.fattore;
+  const eV = es(a.y), eA = es(ry), vere = fiscoAnno(a.y, a.Rann), altre = fiscoAnno(ry, a.Rann - (eV - eA));
+  return {tot: vere.inTasca + eV - altre.inTasca - eA, irpef: altre.netta - vere.netta, crediti: vere.credito + vere.esente - altre.credito - altre.esente, esonero: eV - eA};
+}
+// 2026: aumenti dei rinnovi tassati al 5% invece che all'aliquota marginale più le addizionali
+function risparmio5(a){
+  const incr = a.L.reduce((s, b) => s + b.voci.filter(v => /increm/i.test(v.descrizione) && /5%/.test(v.descrizione) && v.importo > 0).reduce((t, v) => t + v.importo, 0), 0);
+  if (!incr) return null;
+  const marg = irpefLorda(a.y, a.Rann + 100) / 100 - irpefLorda(a.y, a.Rann) / 100;
+  return {incr, risparmio: incr * (marg + 0.02 - 0.05)};
+}
+const sgn = d => (d > 0 ? '+' : d < 0 ? '−' : '') + fmt(Math.abs(d));
+const nomeAzienda = s => String(s || '').replace(/\b(s\.?\s?r\.?\s?l\.?|s\.?\s?p\.?\s?a\.?)\s*$/i, '').trim();
+const nomeBusta = b => b.tipo === 'mensile' ? `${mese(b.mese - 1)} ${b.anno}` : b.tipo === 'tredicesima' ? `Tredicesima ${b.anno}` : b.tipo === 'tfr' ? `TFR ${b.anno}` : `${frase(b.tipo)} ${b.anno}`;
+
+async function vBuste(){
+  let B = [], errore = '';
+  try { B = await getBuste(); } catch(e) { errore = String(e.message).slice(0, 160); }
+  const testa = `<h1 class="lt">Buste paga</h1>
+  <label class="drop" id="dropBusta">${ico('FileUp')}<b>Carica il PDF della busta paga</b><span>Dai file del telefono o del computer</span><input type="file" accept="application/pdf,.pdf" onchange="leggiBusta(this.files);this.value=''"></label>
+  ${BP.fase === 'lettura' ? `<div class="card" style="margin-top:16px"><div class="loading" style="padding:16px 0"><span class="spinner"></span>Claude sta leggendo la busta paga</div></div>` : ''}
+  ${BP.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>${esc(BP.errore)}</span></p>` : ''}
+  <p class="note">La busta viene letta da Claude (2-3 centesimi), controlli i valori, poi va nel file BUSTE PAGA e il PDF nella cartella dell'anno. Il PDF arriva a Claude intero, con codice fiscale e IBAN, come le bollette.</p>
+  ${errore ? `<p class="avviso">${ico('TriangleAlert')}<span>Non riesco a leggere BUSTE PAGA: ${esc(errore)}</span></p>` : ''}`;
+  if (!B.length) return testa;
+  const A = anniBuste(B), ult = B.filter(b => b.tipo === 'mensile').pop() || B[B.length - 1], c = contiBusta(ult);
+
+  // l'ultima busta, voce per voce
+  const parti = [['netto', 'Netto', 'var(--bar-ok)'], ['contributi', 'Contributi INPS', 'var(--line-1)'], ['irpef', 'IRPEF', 'var(--bar-warn)'], ['add', 'Addizionali', 'var(--line-2)']].filter(([k]) => c[k] > 0);
+  const totP = parti.reduce((s, [k]) => s + c[k], 0);
+  const ultima = `<section class="card hero">
+    <p class="lead">${nomeBusta(ult)}: <b class="num">${fmt(ult.netto)}</b> netti</p>
+    <p class="muted" style="margin-top:8px">${esc(nomeAzienda(ult.azienda))}${ult.livello ? `, livello ${esc(ult.livello)}` : ''}. Paga contrattuale ${fmt(ult.retribuzione_mensile)} al mese${ult.ore_lavorate ? `, ${nf0.format(ult.ore_lavorate)} ore lavorate` : ''}.</p>
+    <div class="stack">${parti.map(([k, , col]) => `<i style="width:${c[k] / totP * 100}%;background:${col}"></i>`).join('')}</div>
+    <div class="key" style="margin-bottom:8px">${parti.map(([k, n, col]) => `<span style="--c:${col}"><i></i>${n} ${nf0.format(c[k] / totP * 100)}%</span>`).join('')}</div>
+    <div class="list plain">${VOCI_BUSTA.filter(([k]) => Math.abs(c[k]) >= 1).map(([k, n, s]) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${s < 0 ? '− ' : ''}${n}</span><span class="num">${fmt(c[k])}</span></span>
+      <span class="row-sub">${SPIEGA_BUSTA[k]}.</span></span></div>`).join('')}
+      <div class="row"><span class="row-main"><span class="row-line"><span class="row-title"><b>Netto in busta</b></span><span class="num"><b>${fmt(ult.netto)}</b></span></span></span></div></div>
+    <p class="note" style="margin:8px 0 0">${ult.ferie_residue || ult.permessi_residui ? `Ti restano ${nf0.format(ult.ferie_residue)} ore di ferie e ${nf0.format(ult.permessi_residui)} di permessi. ` : ''}${ult.tfr_mese ? `TFR maturato nel mese ${fmt(ult.tfr_mese)}. ` : ''}${ult.welfare ? `Welfare aziendale ${fmt(ult.welfare)}, in beni e servizi, non nel netto.` : ''}</p>
+  </section>`;
+
+  // cosa è cambiato: anno in corso contro gli stessi mesi dell'anno prima, oppure l'ultimo anno intero contro il precedente
+  const aU = A[A.length - 1];
+  let L2, L1, titolo, t1, t2;
+  if (!aU.completo && aU.mensili.length >= 3) {
+    const mesi = new Set(aU.mensili.map(b => b.mese));
+    L2 = aU.mensili; L1 = B.filter(b => b.anno === aU.y - 1 && b.tipo === 'mensile' && mesi.has(b.mese)); t1 = sommaConti(L1); t2 = sommaConti(L2);
+    titolo = `Da gennaio ${aD(mese(Math.max(...mesi) - 1).toLowerCase())} ${aU.y} contro gli stessi mesi del ${aU.y - 1}`;
+  } else {
+    const ai = A.filter(a => a.completo), x2 = ai[ai.length - 1], x1 = ai[ai.length - 2];
+    if (x1) { L2 = x2.L; L1 = x1.L; t1 = x1.tot; t2 = x2.tot; titolo = `${x2.y} contro ${x1.y}`; }
+  }
+  let cambiato = '';
+  if (L1 && L1.length && L2.length) {
+    const yy = L2[0].anno, aY = A.find(a => a.y === yy);
+    const leggi = aY && aY.R ? effettoLeggi(aY, yy - 1).tot * (aY.completo ? 1 : L2.length / 12) : null, r5 = aY ? risparmio5(aY) : null;
+    const netti = [t1.netto - t1.esenti, t2.netto - t2.esenti];
+    cambiato = `<h2 class="gh">Cosa è cambiato in un anno</h2>
+    <div class="card"><p>${titolo}: hai preso <b class="num ${t2.netto >= t1.netto ? 'pos' : 'neg'}">${sgn(t2.netto - t1.netto)}</b> netti (${fmt(t2.netto)} contro ${fmt(t1.netto)}).</p>
+      <p class="muted" style="margin-top:8px">Senza rimborsi e trasferte lo stipendio netto è ${fmt(netti[1])} contro ${fmt(netti[0])}: ${sgn(netti[1] - netti[0])}.${leggi != null && Math.abs(leggi) >= 1 ? ` Le leggi nuove dell'anno valgono circa ${sgn(leggi)} di questa differenza.` : leggi != null ? ' Le leggi nuove dell\'anno non cambiano quasi niente al tuo reddito.' : ''}${r5 ? ` L'imposta al 5% sugli aumenti contrattuali (${fmt(r5.incr)} finora) ti fa risparmiare circa ${fmt(r5.risparmio)}.` : ''}</p></div>
+    <div class="list">${VOCI_BUSTA.filter(([k]) => Math.abs(t1[k]) + Math.abs(t2[k]) >= 1).map(([k, n, s]) => { const d = t2[k] - t1[k], buono = d * s >= 0;
+      return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${n}</span><span class="num ${Math.abs(d) < 1 ? 'muted' : buono ? 'pos' : 'neg'}">${sgn(d)}</span></span>
+      <span class="row-sub num">${fmt(t2[k])} contro ${fmt(t1[k])}${t1[k] > 0 ? `, ${(d >= 0 ? '+' : '−') + nf0.format(Math.abs(d / t1[k] * 100))}%` : ''}</span></span></div>`; }).join('')}</div>
+    <p class="note">In verde quello che ti ha lasciato più soldi, in rosso quello che te ne ha tolti: più contributi o più IRPEF sono in rosso anche quando dipendono da uno stipendio più alto.</p>`;
+  }
+
+  // le leggi: ogni anno con le regole dell'anno prima e con quelle del 2019, a parità di stipendio
+  const conR = A.filter(a => a.R > 0 && a.y >= 2019), base = conR[0] ? conR[0].y : 2019;
+  const righeLeggi = conR.map(a => { const p = a.y > base ? effettoLeggi(a, a.y - 1) : null, b0 = effettoLeggi(a, base), f = fiscoAnno(a.y, a.Rann), r5 = risparmio5(a);
+    const fine = a.L.filter(b => b.anno_irpef_lorda), lordaB = fine.reduce((s, b) => s + b.anno_irpef_lorda, 0), Rb = fine.reduce((s, b) => s + b.anno_imponibile_irpef, 0);
+    const ok = fine.length === 1 && a.completo && Math.abs(Rb - a.R) < 1 ? Math.abs(irpefLorda(a.y, Rb) - lordaB) < 1 : null;
+    return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${a.y}${a.completo ? '' : ' <span class="muted" style="font-size:13px">proiezione</span>'}</span><span class="num ${p ? (p.tot > 1 ? 'pos' : p.tot < -1 ? 'neg' : 'muted') : 'muted'}">${p ? sgn(p.tot + (r5 && a.y === 2026 ? r5.risparmio * (a.completo ? 1 : 12 / a.mensili.length) : 0)) : 'base'}</span></span>
+      <span class="row-sub">${LEGGI_ANNO[annoRegole(a.y)] || ''}</span>
+      <span class="row-sub num">Reddito ${fmt(a.Rann)}, IRPEF netta ${fmt(f.netta)}${f.credito ? `, bonus ${fmt(f.credito)}` : ''}${f.esente ? `, somma esente ${fmt(f.esente)}` : ''}. ${a.y > base ? `Rispetto alle regole del ${base}: ${sgn(b0.tot)} l'anno.` : ''}${ok === true ? ' Calcolo uguale alla busta.' : ok === false ? ' Il calcolo non torna con la busta: va controllato.' : ''}</span></span></div>`; }).reverse().join('');
+  const ultimoIntero = conR.filter(a => a.completo).pop();
+  const leggiSez = conR.length ? `<h2 class="gh">Le leggi sul tuo netto</h2>
+    <div class="card"><p>${ultimoIntero ? (e => `Con le regole del ${base}, nel ${ultimoIntero.y} avresti preso <b class="num">${fmt(Math.abs(e))}</b> ${e >= 0 ? 'in meno' : 'in più'} a parità di stipendio.`)(effettoLeggi(ultimoIntero, base).tot) : ''}</p>
+      <p class="muted" style="margin-top:8px">Per ogni anno ricalcolo IRPEF, detrazioni, bonus ed esonero sui contributi con le regole dell'anno prima: la cifra è quanto le leggi nuove ti hanno lasciato in più (verde) o in meno (rosso). Lo stipendio resta quello vero.</p></div>
+    <div class="list">${righeLeggi}</div>
+    <p class="note">Gli scaglioni non seguono l'inflazione: se il lordo sale solo per stare al passo coi prezzi, paghi comunque un po' di più. Le addizionali dipendono da regione e comune di residenza e non sono ricalcolate.</p>` : '';
+
+  // il netto contro l'inflazione (senza rimborsi, 730 e TFR)
+  const interi = A.filter(a => a.completo && NIC[a.y]), yRif = Math.max(...Object.keys(NIC).map(Number));
+  const stip = a => a.tot.netto - a.tot.esenti - a.tot.r730;
+  let inflazione = '';
+  if (interi.length >= 2) {
+    const K = interi.map(a => a.y), primo = interi[0], ultimoA = interi[interi.length - 1];
+    const reale = a => stip(a) * NIC[ultimoA.y] / NIC[a.y];
+    const crescN = stip(ultimoA) / stip(primo) - 1, crescP = NIC[ultimoA.y] / NIC[primo.y] - 1;
+    inflazione = `<h2 class="gh">Il netto contro l'inflazione</h2><div class="card">
+      ${disegnaLinee(K, [{col:'var(--line-1)', nome:'Netto dell\'anno', v: interi.map(stip)}, {col:'var(--bar-ok)', nome:`In euro del ${ultimoA.y}`, v: interi.map(reale)}], k => String(k), 1)}
+      <p class="note" style="margin:8px 0 0">Dal ${primo.y} al ${ultimoA.y} lo stipendio netto è cresciuto del ${nf0.format(crescN * 100)}%, i prezzi del ${nf0.format(crescP * 100)}%: il potere d'acquisto è ${crescN > crescP ? 'salito' : 'sceso'} del ${nf0.format(Math.abs((1 + crescN) / (1 + crescP) - 1) * 100)}%. Prezzi: indice NIC dell'ISTAT${NIC_PROVVISORIO <= yRif ? `, il ${NIC_PROVVISORIO} è provvisorio` : ''}. Senza rimborsi, 730 e TFR.</p></div>`;
+  }
+
+  // anno per anno
+  const perAnno = `<h2 class="gh">Anno per anno</h2><div class="list">${[...A].reverse().map(a => { const t = a.tot, tolto = t.contributi + t.irpef + t.add + t.altro - t.bonus;
+    const tfrL = B.filter(b => b.anno === a.y && b.tipo === 'tfr');
+    return `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${a.y} <span class="muted" style="font-size:13px">${a.mensili.length === 1 ? '1 mese' : a.mensili.length + ' mesi'}</span></span><span class="num">${fmt(t.netto)}</span></span>
+      <span class="row-sub num">Lordo ${fmt(t.lordo)}, trattenuto ${t.lordo ? nf0.format(tolto / t.lordo * 100) : 0}% fra contributi e tasse${t.esenti ? `, rimborsi ${fmt(t.esenti)}` : ''}. Paga contrattuale ${fmt(a.ultima ? a.ultima.retribuzione_mensile : 0)} al mese, ${esc(nomeAzienda(a.ultima ? a.ultima.azienda : ''))}.${a.tfr ? ` TFR maturato ${fmt(a.tfr)}.` : ''}${tfrL.length ? ` TFR liquidato netto ${fmt(tfrL.reduce((s, b) => s + b.netto, 0))}, fuori da questi conti.` : ''}</span></span></div>`; }).join('')}</div>
+    <p class="note">Il netto comprende rimborsi e trasferte. Anni con pochi mesi non sono confrontabili per il totale.</p>`;
+
+  // tutte le buste
+  const tutte = `<h2 class="gh">Tutte</h2><div class="list">${[...B].reverse().slice(0, 40).map(b => `<button class="row" onclick="apriBusta(${b.anno},${b.mese},'${b.tipo}')"><span class="row-main"><span class="row-line"><span class="row-title">${nomeBusta(b)}</span><span class="num">${fmt(b.netto)}</span></span>
+      <span class="row-sub num">Lordo ${fmt(b.totale_competenze)}, ${esc(nomeAzienda(b.azienda))}</span></span>${chev()}</button>`).join('')}</div>
+    ${B.length > 40 ? `<p class="note">Le altre ${B.length - 40} sono nel file BUSTE PAGA.</p>` : ''}`;
+
+  return testa + `<div class="cols"><div>${ultima}${inflazione}${perAnno}</div><div>${cambiato}${leggiSez}${tutte}</div></div>`;
+}
+function dopoBuste(){
+  const z = $('#dropBusta'); if (!z) return;
+  z.ondragover = e => { e.preventDefault(); z.classList.add('su'); };
+  z.ondragleave = () => z.classList.remove('su');
+  z.ondrop = e => { e.preventDefault(); z.classList.remove('su'); leggiBusta(e.dataTransfer.files); };
+}
+async function apriBusta(a, m, tipo){
+  const b = (await getBuste()).find(x => x.anno === a && x.mese === m && x.tipo === tipo); if (!b) return;
+  const c = contiBusta(b), riga = (l, v, cl = '') => `<div class="row"><span class="row-main"><span class="row-line"><span>${l}</span><span class="num ${cl}">${v}</span></span></span></div>`;
+  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>${nomeBusta(b)}</h2><span></span></div>
+  <div class="sheet-scroll">
+    <p class="tx-desc" style="margin-top:8px">${esc(nomeAzienda(b.azienda))}${b.ccnl ? `, ${esc(b.ccnl)}` : ''}${b.livello ? `, livello ${esc(b.livello)}` : ''}.${b.accredito ? ` Accreditata il ${giornoBreve(b.accredito)} ${b.accredito.slice(0, 4)}.` : ''}</p>
+    <div class="list plain">${VOCI_BUSTA.filter(([k]) => Math.abs(c[k]) >= 1).map(([k, n, s]) => riga((s < 0 ? '− ' : '') + n, fmt(c[k]))).join('')}${riga('<b>Netto</b>', `<b>${fmt(b.netto)}</b>`)}</div>
+    ${b.voci.length ? `<p class="sublabel">Righe della busta</p><div class="list plain">${b.voci.map(v => riga(`${esc(frase(v.descrizione))} <span class="muted" style="font-size:12px">${esc(v.codice)}</span>`, fmt(v.importo), v.importo < 0 ? 'neg' : '')).join('')}</div>` : ''}
+    <p class="note">${b.imponibile_irpef ? `Imponibile IRPEF ${fmt(b.imponibile_irpef)}, IRPEF lorda ${fmt(b.irpef_lorda)}, detrazioni ${fmt(b.detrazioni_lavoro)}. ` : ''}${b.leggi ? `Leggi citate: ${esc(b.leggi)}. ` : ''}${b.note ? esc(b.note) : ''}</p>
+    ${b.file ? `<button class="btn soft" style="margin-top:16px" onclick="apriPdfBusta(${b.anno},${esc(JSON.stringify(b.file))})">Apri la busta</button>` : ''}
+  </div>`);
+}
+async function apriPdfBusta(anno, nomeFile){
+  try { const f = await apiGet(`/me/drive/root:/${percorsoGraph(cartellaBuste() + '/' + anno + '/' + nomeFile)}`); window.open(f.webUrl, '_blank', 'noopener'); }
+  catch(e) { toast('Non trovo il file ' + nomeFile); }
+}
+
+// lettura, revisione e salvataggio di una busta nuova
+async function leggiBusta(scelti){
+  const pdf = [...(scelti||[])].find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+  if (!pdf) { BP = {fase:'scelta', errore:'Scegli il PDF della busta paga.'}; render(); return; }
+  if (pdf.size > 25e6) { BP = {fase:'scelta', errore:'Il PDF supera i 25 MB.'}; render(); return; }
+  BP = {fase:'lettura'}; if (S.view === 'buste') render();
+  try {
+    const [d, B] = await Promise.all([leggiConClaude('/busta', {tipo:'pdf', dati: await aBase64(pdf)}), getBuste().catch(() => [])]);
+    if (!d.leggibile) throw new Error('non sembra una busta paga');
+    if (!(d.anno >= 2000) || !(d.mese >= 1 && d.mese <= 12)) { d.anno = d.anno || new Date().getFullYear(); d.mese = d.mese || 1; }
+    BP = {fase:'revisione', d, pdf, esiste: !!B.find(b => b.anno === d.anno && b.mese === d.mese && b.tipo === d.tipo)};
+    openSheet(''); disegnaBusta();
+  } catch(e) { BP = {fase:'scelta', errore:'Non sono riuscito a leggerla: ' + (e.message || e)}; }
+  if (S.view === 'buste') render();
+}
+function disegnaBusta(){
+  const d = BP.d; if (!d) return;
+  const campo = (k, lab, un = '€') => `<label class="row"><span>${lab}</span><input class="field" inputmode="decimal" value="${String(d[k]).replace('.', ',')}" onchange="modBusta('${k}',this.value)"><span class="muted" style="font-size:13px">${un}</span></label>`;
+  const scarto = d.netto - (d.totale_competenze - d.totale_trattenute);
+  $('#sheet').innerHTML = `<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Annulla</button><h2>Busta paga</h2><span></span></div>
+  <div class="sheet-scroll">
+    <p class="tx-desc" style="margin-top:8px">${esc(nomeAzienda(d.azienda) || 'Busta paga')}, ${nomeBusta(d).toLowerCase()}.</p>
+    <div class="list plain">${campo('mese', 'Mese', '')}${campo('anno', 'Anno', '')}${campo('totale_competenze', 'Totale competenze')}${campo('totale_trattenute', 'Totale trattenute')}${campo('netto', 'Netto in busta')}
+      ${campo('contributi_dipendente', 'Contributi INPS')}${campo('irpef_netta', 'IRPEF del mese')}${campo('esenti', 'Rimborsi e trasferte')}</div>
+    ${Math.abs(scarto) >= 0.02 && Math.abs(scarto - d.arrotondamenti) >= 0.02 ? `<p class="avviso">${ico('TriangleAlert')}<span>Competenze meno trattenute fanno ${fmt(d.totale_competenze - d.totale_trattenute)}, non ${fmt(d.netto)}: controlla i valori.</span></p>` : ''}
+    ${BP.esiste ? `<p class="avviso">${ico('TriangleAlert')}<span>${nomeBusta(d)} c'è già nel file: salvandola la aggiungerei una seconda volta.</span></p>` : ''}
+    <p class="note">${(d.voci||[]).length} righe lette${(d.leggi||[]).length ? `, leggi citate: ${esc(d.leggi.join(', '))}` : ''}. Il PDF va in BUSTE PAGA/${d.anno}.</p>
+  </div>
+  <div class="sheet-foot"><button class="btn" id="btnBusta" onclick="salvaBusta()">Salva</button></div>`;
+}
+function modBusta(k, v){ BP.d[k] = k === 'mese' || k === 'anno' ? parseInt(v, 10) || 0 : parseFloat(String(v).replace(/\./g, '').replace(',', '.')) || 0; disegnaBusta(); }
+async function salvaBusta(){
+  const d = BP.d, b = $('#btnBusta'); if (!d) return;
+  if (b) { b.disabled = true; b.textContent = 'Salvataggio…'; }
+  try {
+    const az = nomeAzienda(d.azienda).toUpperCase() || 'AZIENDA';
+    const base = d.tipo === 'tredicesima' ? `Tredicesima ${d.anno} (${az})` : d.tipo === 'tfr' ? `TFR ${d.anno} (${az})` : `Busta paga ${String(d.mese).padStart(2, '0')}-${d.anno} (${az})`;
+    let nomeFile = BP.nomeFile || '';
+    if (BP.pdf) {
+      await getToken();
+      const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${percorsoGraph(cartellaBuste() + '/' + d.anno + '/' + base + '.pdf')}:/content?@microsoft.graph.conflictBehavior=rename`, {method:'PUT', headers:{Authorization:'Bearer ' + accessToken, 'Content-Type':'application/pdf'}, body:BP.pdf});
+      if (!res.ok) throw new Error(await res.text());
+      nomeFile = (await res.json()).name || base + '.pdf'; BP.pdf = null; BP.nomeFile = nomeFile;
+    }
+    const id = await idFileBuste(), riga = {...d, azienda: az, leggi: (d.leggi||[]).join(', '), file: nomeFile, accredito: '', note: 'caricata dall\'app'};
+    // dopo un errore si riprova solo quello che manca, senza righe doppie
+    if (!BP.rigaFatta) { await apiPost(`/me/drive/items/${id}/workbook/tables/TblBuste/rows`, {values: [COL_BUSTE.map(k => riga[k] == null ? '' : riga[k])]}); BP.rigaFatta = true; }
+    if ((d.voci||[]).length) await apiPost(`/me/drive/items/${id}/workbook/tables/TblVociBuste/rows`, {values: d.voci.map(v => [d.anno, d.mese, d.tipo, v.codice, v.descrizione, v.importo])});
+    busteCache = null; closeSheet(); BP = {fase:'scelta'}; toast('Busta paga salvata');
+  } catch(e) { toast('Errore: ' + String(e.message).slice(0, 160)); if (b) { b.disabled = false; b.textContent = 'Riprova'; } return; }
+  if (S.view === 'buste') render();
+}
+
 // ── DENTRO LE BOLLETTE: le voci (energia, rete, accise, IVA, altre partite), il prezzo per unità e cosa è cambiato in un anno
 const VOCI_BOL = [['vendita', 'Energia', 'var(--line-2)'], ['rete', 'Rete e oneri di sistema', 'var(--line-1)'], ['accise', 'Accise', 'var(--bar-warn)'], ['iva', 'IVA', 'var(--bar-ok)'], ['altre', 'Altre partite', 'var(--track)']];
 const SPIEGA_VOCE = { vendita:'Il prezzo dell\'energia o del gas, più la quota fissa del fornitore', rete:'Trasporto, contatore, potenza e oneri generali: tariffe decise dall\'Autorità, uguali per tutti',
