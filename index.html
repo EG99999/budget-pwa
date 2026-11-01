@@ -951,44 +951,74 @@ function annoChart(punti, base, y, tono){
 // liquidità: quanto dovresti avere (1° gennaio + entrate - uscite) contro quanto c'è davvero sul conto, alla stessa data
 const chiaveSaldo = () => 'saldoReale_' + annoFile();
 function saldoReale(){ try { return JSON.parse(localStorage.getItem(chiaveSaldo()) || 'null'); } catch(e) { return null; } }
-function salvaSaldoReale(valore, data){ try { localStorage.setItem(chiaveSaldo(), JSON.stringify({valore, data})); } catch(e) {} }
+function salvaSaldoReale(valore, data, carta, contanti){
+  try { const R = saldoReale() || {}; localStorage.setItem(chiaveSaldo(), JSON.stringify({valore, data, carta: carta || null, contanti: contanti === undefined ? R.contanti ?? null : contanti})); } catch(e) {}
+}
+// carta di credito: l'estratto del conto elenca i singoli acquisti e, il 10 del mese dopo, il loro totale ("estratto conto al 30/09/26").
+// Gli acquisti dopo l'ultimo estratto sono già nel file ma non ancora tolti dal saldo: li sommo, solo se il periodo prima torna col suo addebito
+function cartaDaAddebitare(mov){
+  const addebiti = mov.map(m => { const x = m.originale.match(/estratto conto al (\d{1,2}\/\d{1,2}\/\d{2,4})/i); return x && m.importo < 0 ? {fine: dataIso(x[1]), il: m.data, importo: -m.importo} : null; })
+    .filter(a => a && isoValida(a.fine)).sort((a, b) => a.fine < b.fine ? -1 : 1);
+  if (addebiti.length < 2) return null;
+  const acquisti = mov.filter(m => /\*{4}\s*\*{4}\s*\d{4}/.test(m.originale) && !/estratto conto al/i.test(m.originale));
+  const somma = (da, a) => -acquisti.filter(m => m.data > da && m.data <= a).reduce((s, m) => s + m.importo, 0);
+  const [prima, ultimo] = addebiti.slice(-2);
+  if (Math.abs(somma(prima.fine, ultimo.fine) - ultimo.importo) > ultimo.importo * 0.1) return null;
+  const il = new Date(ultimo.il + 'T12:00'); il.setMonth(il.getMonth() + 1);
+  return {importo: Math.round(somma(ultimo.fine, '9999-12-31') * 100) / 100, dal: ultimo.fine, il: il.toISOString().slice(0, 10)};
+}
 function schedaLiquidita(Yr, base, y){
   if (base == null) return `<h2 class="gh">Liquidità</h2><div class="card"><p>Per sapere quanta liquidità dovresti avere serve quella del 1° gennaio.</p><p class="note" style="margin:8px 0 0">Scrivila nel foglio ANALISI CFO del file ${y}, alla riga "Liquidità iniziale anno".</p></div>`;
   const E = entrate(Yr), U = uscite(Yr), I = investito(Yr), atteso = base + E - U, R = saldoReale();
   let confronto = '';
   if (R && isoValida(R.data) && R.data.startsWith(String(y))) {
-    const finoA = Yr.filter(r => r.data && r.data <= R.data), att = base + entrate(finoA) - uscite(finoA), diff = R.valore - att;
-    const spiega = Math.abs(diff) < 20 ? 'Torna: il file è allineato al conto.'
-      : diff > 0 ? `Sul conto c'è più del previsto: forse entrate non registrate, oppure spese segnate nel file ma non ancora addebitate (la carta di credito si addebita il mese dopo).`
-      : `Sul conto c'è meno del previsto: forse spese non registrate, contanti prelevati e non segnati, commissioni della banca. Il controllo dell'estratto conto le trova.`;
-    confronto = `<div class="sum2" style="margin-top:16px"><div><small>Sul conto il ${giornoBreve(R.data)}</small><b>${fmt(R.valore)}</b></div><div><small>Differenza</small><b class="${Math.abs(diff) < 20 ? 'pos' : 'warn'}">${diff >= 0 ? '+' : '−'}${fmt(Math.abs(diff))}</b></div></div>
-      <p class="note" style="margin:8px 0 0">Alla stessa data dovresti averne ${fmt(att)}. ${spiega}</p>`;
+    const finoA = Yr.filter(r => r.data && r.data <= R.data), att = base + entrate(finoA) - uscite(finoA);
+    const carta = R.carta?.importo || 0, cont = R.contanti || 0, vero = R.valore - carta + cont, diff = vero - att;
+    const spiega = Math.abs(diff) < 20 ? 'Torna: il file è allineato.'
+      : diff > 0 ? `Hai più del previsto: forse entrate non registrate${carta ? '' : ', oppure spese con la carta di credito non ancora tolte dal conto (succede il 10 del mese dopo): scrivile in "Aggiorna"'}.`
+      : `Hai meno del previsto: forse spese non registrate o commissioni della banca${cont ? '' : ', oppure contanti che hai in tasca: scrivili in "Aggiorna"'}. Il controllo dell'estratto conto trova le spese mancanti.`;
+    const voce = (t, s, v, cls) => `<div class="row"><span class="row-main"><span class="row-line"><span class="row-title">${t}</span><span class="num ${cls || ''}">${v}</span></span>${s ? `<span class="row-sub">${s}</span>` : ''}</span></div>`;
+    confronto = `<div class="list plain" style="margin-top:16px">
+      ${voce(`Sul conto il ${giornoBreve(R.data)}`, '', fmt(R.valore))}
+      ${carta ? voce(`Carta da addebitare${R.carta.il ? ' il ' + giornoBreve(R.carta.il) : ''}`, R.carta.dal ? `Acquisti dopo l'estratto della carta del ${giornoBreve(R.carta.dal)}: già nel file, non ancora tolti dal conto` : 'Spese con la carta di credito non ancora tolte dal conto', '−' + fmt(carta)) : ''}
+      ${cont ? voce('Contanti in tasca', '', '+' + fmt(cont), 'pos') : ''}
+      ${carta || cont ? voce('<b>Hai davvero</b>', '', `<b>${fmt(vero)}</b>`) : ''}
+    </div>
+    <div class="sum2" style="margin-top:8px"><div><small>Il file dice</small><b>${fmt(att)}</b></div><div><small>Differenza</small><b class="${Math.abs(diff) < 20 ? 'pos' : 'warn'}">${diff >= 0 ? '+' : '−'}${fmt(Math.abs(diff))}</b></div></div>
+      <p class="note" style="margin:8px 0 0">${spiega}</p>`;
   }
   return `<h2 class="gh">Liquidità</h2>
   <section class="card">
     <p class="lead">Dovresti avere <b class="num">${fmt(atteso)}</b></p>
     <p class="muted" style="margin-top:8px">${fmt(base)} al 1° gennaio, più ${fmt(E)} di entrate, meno ${fmt(U)} di uscite${I > 0 ? `, di cui <span class="pos">${fmt(I)} investiti</span>` : ''}.</p>
     ${confronto}
-    <button class="btn soft" style="margin-top:16px" onclick="apriSaldoReale()">${R ? 'Aggiorna il saldo del conto' : 'Scrivi quanto hai sul conto'}</button>
+    <button class="btn soft" style="margin-top:16px" onclick="apriSaldoReale()">${R ? 'Aggiorna conto, carta e contanti' : 'Scrivi quanto hai sul conto'}</button>
   </section>`;
 }
 function apriSaldoReale(){
   const R = saldoReale() || {};
   openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Annulla</button><h2>Saldo del conto</h2><span></span></div>
   <div class="sheet-scroll">
-    <p class="muted" style="margin:8px 8px 16px">Scrivi quanto hai davvero, conti e contanti compresi come per la liquidità del 1° gennaio. Lo confronto con quello che dice il file alla stessa data. Si aggiorna anche da solo quando carichi l'estratto conto in Excel.</p>
+    <p class="muted" style="margin:8px 8px 16px">Lo confronto con quello che dice il file alla stessa data. Quando carichi l'estratto Fineco in Excel, saldo e carta da addebitare si compilano da soli.</p>
     <div class="list plain">
-      <label class="row"><span>Saldo</span><input class="field" id="saldoV" inputmode="decimal" placeholder="0,00" value="${R.valore != null ? String(R.valore).replace('.', ',') : ''}"></label>
+      <label class="row"><span>Saldo del conto</span><input class="field" id="saldoV" inputmode="decimal" placeholder="0,00" value="${virgola(R.valore)}"></label>
       <label class="row"><span>Alla data</span><input class="field" id="saldoD" type="date" value="${R.data || oggiIso()}"></label>
+      <label class="row"><span>Carta da addebitare</span><input class="field" id="saldoC" inputmode="decimal" placeholder="0,00" value="${virgola(R.carta?.importo)}"></label>
+      <label class="row"><span>Contanti in tasca</span><input class="field" id="saldoT" inputmode="decimal" placeholder="0,00" value="${virgola(R.contanti)}"></label>
     </div>
+    <p class="note" style="margin:8px 8px 0">La carta di credito si toglie dal conto il 10 del mese dopo: le spese fatte dopo l'ultimo addebito sono già nel file ma non ancora sul conto. I contanti sono soldi tuoi che il conto non vede.</p>
   </div>
   <div class="sheet-foot"><button class="btn" onclick="confermaSaldoReale()">Salva</button></div>`);
   setTimeout(() => { const i = $('#saldoV'); if (i) i.focus(); }, 300);
 }
+const virgola = v => v != null ? String(v).replace('.', ',') : '';
+const leggiImporto = id => { const v = parseFloat(String($(id).value).replace(/\./g, '').replace(',', '.')); return isNaN(v) ? null : Math.abs(v); };
 function confermaSaldoReale(){
-  const v = parseFloat(String($('#saldoV').value).replace(/\./g, '').replace(',', '.')), d = $('#saldoD').value;
+  const R = saldoReale() || {}, v = parseFloat(String($('#saldoV').value).replace(/\./g, '').replace(',', '.')), d = $('#saldoD').value, c = leggiImporto('#saldoC');
   if (isNaN(v) || !isoValida(d)) { toast('Scrivi il saldo e la data'); return; }
-  salvaSaldoReale(v, d); closeSheet(); toast('Saldo salvato'); render();
+  // la carta letta dall'estratto tiene date e spiegazione finché l'importo non cambia
+  const carta = !c ? null : R.carta && Math.abs(R.carta.importo - c) < 0.005 ? R.carta : {importo: c};
+  salvaSaldoReale(v, d, carta, leggiImporto('#saldoT')); closeSheet(); toast('Salvato'); render();
 }
 function apriMese(y, m){ S.f = {q:'', per:'mese', senso:'', cat:'', sort:'data-desc', limit:300}; S.movM = {y, m}; go('movimenti'); }
 function chiediPiano(perdita){
@@ -1857,7 +1887,7 @@ function movimentiDaTabella(R){
     }
     if (mov.length) {
       const testa = R.slice(0, h).flat().map(v => String(v ?? '')).join(' '), sf = testa.match(/saldo finale:?\s*(-?[\d.]+,\d{2})/i);
-      if (sf) mov.saldoFinale = numero(sf[1]);
+      if (sf) { mov.saldoFinale = numero(sf[1]); mov.carta = cartaDaAddebitare(mov); }
       return mov;
     }
   }
@@ -1890,7 +1920,7 @@ async function leggiEstratto(scelti){
       conto = j.conto; costo = j.costo || 0;
     }
     if (!mov.length) throw new Error('nel file non ho trovato movimenti');
-    if (mov.saldoFinale != null) { const ultimo = mov.reduce((a, m) => m.data > a ? m.data : a, mov[0].data); if (+ultimo.slice(0, 4) === annoFile()) salvaSaldoReale(mov.saldoFinale, ultimo); }
+    if (mov.saldoFinale != null) { const ultimo = mov.reduce((a, m) => m.data > a ? m.data : a, mov[0].data); if (+ultimo.slice(0, 4) === annoFile()) salvaSaldoReale(mov.saldoFinale, ultimo, mov.carta); }
     const r = riconcilia(mov, rows, ES.tipo);
     const daFare = r.mancanti.filter(m => !m.pronto && !m.altroAnno);
     for (let i = 0; i < daFare.length; i += 100) {
