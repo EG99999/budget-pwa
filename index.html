@@ -456,6 +456,7 @@ button.row,.hbar{transition:background-color .2s}
   <p>Le tue entrate e uscite, collegate al file Excel su OneDrive.</p>
   <button class="btn" id="btnLogin" onclick="login()" disabled>Accedi con Microsoft</button>
   <p class="err" id="authError"></p>
+  <button class="link" onclick="azzeraAccesso()" style="margin-top:16px;font-size:14px">Non riesci ad accedere? Azzera l'accesso</button>
 </div>
 
 <div class="screen" id="setupScreen" style="display:none">
@@ -547,16 +548,25 @@ window.addEventListener('load', async () => {
   try { await msalInstance.initialize(); }
   catch(e) { showAuthError('Errore: '+e.message); btnLogin.disabled=false; return; }
   btnLogin.disabled = false;
+  const tornatoDaMicrosoft = /[#&?](code|error)=/.test(location.hash + location.search);
   try {
     const resp = await msalInstance.handleRedirectPromise();
-    if (resp && resp.accessToken) { accessToken=resp.accessToken; msalInstance.setActiveAccount(resp.account); checkSetup(); return; }
-  } catch(e) { showAuthError('Errore di accesso: '+e.message); }
+    if (resp && resp.account) { if (resp.accessToken) accessToken=resp.accessToken; msalInstance.setActiveAccount(resp.account); checkSetup(); return; }
+    if (tornatoDaMicrosoft) showAuthError('Microsoft ha risposto, ma la risposta non è stata accettata. Azzera l\'accesso e riprova.');
+  } catch(e) { showAuthError('Errore di accesso: '+(e.errorCode ? e.errorCode+' – ' : '')+e.message); }
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
-    try { await getToken(); checkSetup(); } catch(e) {}
+    try { await getToken(); checkSetup(); }
+    catch(e) { showAuthError('Accesso non riuscito: '+(e.errorCode ? e.errorCode+' – ' : '')+e.message); }
   }
 });
+// toglie solo i dati dell'accesso Microsoft (non il collegamento al file né le impostazioni) e riparte da zero
+function azzeraAccesso() {
+  [localStorage, sessionStorage].forEach(st => Object.keys(st).filter(k => /^msal|msal\./i.test(k) || k.includes(CLIENT_ID)).forEach(k => st.removeItem(k)));
+  document.cookie.split(';').map(c => c.split('=')[0].trim()).filter(n => /^msal/i.test(n)).forEach(n => document.cookie = n + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/budget-pwa/');
+  location.replace(msalConfig.auth.redirectUri);
+}
 
 async function login() {
   const btn = document.getElementById('btnLogin');
