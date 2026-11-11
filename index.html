@@ -446,6 +446,7 @@ button.row,.hbar{transition:background-color .2s}
 .screen>:nth-child(2){animation-delay:.08s}.screen>:nth-child(3){animation-delay:.16s}.screen>:nth-child(4){animation-delay:.24s}.screen>:nth-child(5){animation-delay:.32s}.screen>:nth-child(n+6){animation-delay:.4s}
 .screen>.app-ic{animation:spunta .7s var(--molla) both}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.attesa{opacity:1!important}}
+.diag{margin-top:16px;max-width:560px;width:100%;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;text-align:left;color:var(--muted,#888)}
 </style>
 </head>
 <body>
@@ -505,13 +506,17 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
+// registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
+const DIAG = [];
 const msalConfig = {
   auth: {
     clientId: CLIENT_ID,
     authority: 'https://login.microsoftonline.com/consumers',
     redirectUri: 'https://eg99999.github.io/budget-pwa/'
   },
-  cache: { cacheLocation: 'localStorage' }
+  // lo stato dell'accesso in corso sta in sessionStorage: con il cookie di riserva sopravvive se il browser la svuota nel giro da Microsoft
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true },
+  system: { loggerOptions: { piiLoggingEnabled: false, logLevel: msal.LogLevel.Info, loggerCallback: (l, m) => DIAG.push(String(m).replace(/^\[[^\]]*\]\s*:\s*/, '').slice(0, 220)) } }
 };
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 let accessToken = null;
@@ -548,12 +553,19 @@ window.addEventListener('load', async () => {
   try { await msalInstance.initialize(); }
   catch(e) { showAuthError('Errore: '+e.message); btnLogin.disabled=false; return; }
   btnLogin.disabled = false;
-  const tornatoDaMicrosoft = /[#&?](code|error)=/.test(location.hash + location.search);
+  const hashRitorno = location.hash, tornatoDaMicrosoft = /[#&?](code|error)=/.test(hashRitorno + location.search);
+  const inCorso = [sessionStorage, localStorage].some(st => Object.keys(st).some(k => /interaction/i.test(k)));
   try {
     const resp = await msalInstance.handleRedirectPromise();
     if (resp && resp.account) { if (resp.accessToken) accessToken=resp.accessToken; msalInstance.setActiveAccount(resp.account); checkSetup(); return; }
     if (tornatoDaMicrosoft) showAuthError('Microsoft ha risposto, ma la risposta non è stata accettata. Azzera l\'accesso e riprova.');
   } catch(e) { showAuthError('Errore di accesso: '+(e.errorCode ? e.errorCode+' – ' : '')+e.message); }
+  if (tornatoDaMicrosoft || inCorso) {
+    const chiavi = st => Object.keys(st).filter(k => /msal|interaction/i.test(k)).length;
+    const pre = document.createElement('pre'); pre.className = 'diag';
+    pre.textContent = [`Ritorno da Microsoft: ${(hashRitorno.match(/[#&](code|state|error|client_info)=/g) || ['niente']).join(' ')}`, `Chiavi di accesso: ${chiavi(sessionStorage)} in sessione, ${chiavi(localStorage)} salvate`, ...DIAG.slice(-14)].join('\n');
+    document.getElementById('authScreen').append(pre);
+  }
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
