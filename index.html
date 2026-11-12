@@ -508,7 +508,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 28;
+const VERSIONE_APP = 29;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -549,8 +549,8 @@ const CAT_ICO = {
 const icoCat = c => ico(CAT_ICO[c] || (String(c).includes('HOBBY') ? 'Star' : 'Tag'));
 
 // ── AVVIO E ACCESSO ───────────────────────────────────────────
-// app installata sul computer: Edge riapre il ritorno da Microsoft come pagina nuova e perde la risposta, quindi lì l'accesso va in una finestrella
-const APP_PC = matchMedia('(display-mode: standalone)').matches && !/iPhone|iPad|Android/i.test(navigator.userAgent);
+// sul computer, nell'app installata e in Edge (che con l'app installata dirotta il ritorno da Microsoft), la risposta si perde: lì l'accesso va in una finestrella
+const APP_PC = !/iPhone|iPad|Android/i.test(navigator.userAgent) && (matchMedia('(display-mode: standalone)').matches || /Edg\//.test(navigator.userAgent));
 window.addEventListener('load', async () => {
   // dentro la finestrella dell'accesso la risposta la legge l'app che l'ha aperta: qui non si fa niente
   if (window.opener && window.opener !== window && /[#&](code|error)=/.test(location.hash)) return;
