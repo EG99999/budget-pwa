@@ -1,4 +1,4 @@
-const CACHE = 'budget-v24';
+const CACHE = 'budget-v25';
 const SHELL = [
   './',
   './index.html',
@@ -25,6 +25,11 @@ self.addEventListener('fetch', e => {
   if (url.includes('graph.microsoft.com') ||
       url.includes('login.microsoftonline.com') ||
       url.includes('microsoftonline.com')) return;
+  // la pagina dalla rete quando c'è (così anche il ritorno da Microsoft apre la versione nuova), dal deposito solo senza rete
+  if (e.request.mode === 'navigate') {
+    e.respondWith(fetch(e.request).catch(() => caches.match('./index.html').then(c => c || caches.match('./'))));
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
