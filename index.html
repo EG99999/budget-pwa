@@ -506,6 +506,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
+const VERSIONE_APP = 26;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -562,10 +563,11 @@ window.addEventListener('load', async () => {
     if (resp && resp.account) { if (resp.accessToken) accessToken=resp.accessToken; msalInstance.setActiveAccount(resp.account); checkSetup(); return; }
     if (tornatoDaMicrosoft) showAuthError('Microsoft ha risposto, ma la risposta non è stata accettata. Azzera l\'accesso e riprova.');
   } catch(e) { showAuthError('Errore di accesso: '+(e.errorCode ? e.errorCode+' – ' : '')+e.message); }
-  if (tornatoDaMicrosoft || inCorso) {
+  const tentato = Date.now() - (+localStorage.getItem('accessoTentato') || 0) < 15 * 60000;
+  if (tornatoDaMicrosoft || inCorso || tentato) {
     const chiavi = st => Object.keys(st).filter(k => /msal|interaction/i.test(k)).length;
     const pre = document.createElement('pre'); pre.className = 'diag';
-    pre.textContent = [`Ritorno da Microsoft: ${(hashRitorno.match(/[#&](code|state|error|client_info)=/g) || ['niente']).join(' ')}`, `Chiavi di accesso: ${chiavi(sessionStorage)} in sessione, ${chiavi(localStorage)} salvate`, ...DIAG.slice(-14)].join('\n');
+    pre.textContent = [`Versione ${VERSIONE_APP}, ${navigator.userAgent.match(/(Edg|Chrome|Firefox|Safari)\/[\d.]+/g)?.pop() || ''}, ultimo clic su Accedi ${tentato ? Math.round((Date.now() - localStorage.getItem('accessoTentato')) / 1000) + ' s fa' : 'da più di 15 minuti'}`, `Indirizzo: ${location.pathname}${location.search ? ' con ?' : ''}`, `Ritorno da Microsoft: ${(hashRitorno.match(/[#&](code|state|error|client_info)=/g) || ['niente']).join(' ')}`, `Chiavi di accesso: ${chiavi(sessionStorage)} in sessione, ${chiavi(localStorage)} salvate`, ...DIAG.slice(-14)].join('\n');
     document.getElementById('authScreen').append(pre);
   }
   const accounts = msalInstance.getAllAccounts();
@@ -584,7 +586,7 @@ function azzeraAccesso() {
 
 async function login() {
   const btn = document.getElementById('btnLogin');
-  btn.disabled=true; btn.textContent='Connessione…';
+  btn.disabled=true; btn.textContent='Connessione…'; localStorage.setItem('accessoTentato', Date.now());
   try { await msalInstance.loginRedirect({ scopes:SCOPES }); }
   catch(e) { showAuthError('Errore di accesso: '+e.message); btn.disabled=false; btn.textContent='Accedi con Microsoft'; }
 }
@@ -636,6 +638,7 @@ async function saveConfig() {
   } catch(e) { toast('File non trovato: controlla il percorso'); }
 }
 function startApp() {
+  localStorage.removeItem('accessoTentato');
   document.getElementById('authScreen').style.display  = 'none';
   document.getElementById('setupScreen').style.display = 'none';
   document.getElementById('app').style.display         = 'block';
