@@ -126,7 +126,7 @@ button.row:active{background:var(--fill)}
 .search input{flex:1;min-width:0;border:0;background:none;outline:none;color:var(--text);height:100%;font-size:16px}
 .month{display:flex;align-items:center;justify-content:space-between;margin:0 calc(-1 * var(--s2)) var(--s1)}
 .month span{font-weight:600;font-size:17px}
-.chips{display:flex;gap:var(--s1);overflow-x:auto;padding-bottom:var(--s1);margin-bottom:var(--s1);scrollbar-width:none}
+.chips{display:flex;flex-shrink:0;gap:var(--s1);overflow-x:auto;padding-bottom:var(--s1);margin-bottom:var(--s1);scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;height:32px;padding:0 var(--s2);border-radius:16px;background:var(--fill);font-size:14px;display:flex;align-items:center;white-space:nowrap}
 .chip.on{background:var(--text);color:var(--bg)}
@@ -364,6 +364,8 @@ body:has(> .composer) .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 /* barra laterale: fissa su tablet orizzontale e computer, menu che scorre da sinistra su telefono e tablet verticale */
 .side{display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:45;width:min(288px,86vw);padding:calc(var(--s3) + env(safe-area-inset-top)) var(--s2) calc(var(--s2) + env(safe-area-inset-bottom)) max(var(--s2),env(safe-area-inset-left));background:var(--card);border-right:1px solid var(--sep);overflow-y:auto;overscroll-behavior:contain;transform:translateX(-100%);visibility:hidden;transition:transform .3s cubic-bezier(.32,.72,0,1),visibility .3s}
 .side.open{transform:none;visibility:visible}
+/* la barra scorre: niente si schiaccia quando è più alta della finestra (anni e "Nuova voce" finivano uno sopra l'altro) */
+.side>*{flex-shrink:0}
 .side-scrim{position:fixed;inset:0;z-index:44;background:var(--scrim);opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s}
 .side.open+.side-scrim{opacity:1;visibility:visible}
 .side-head{display:flex;align-items:center;gap:var(--s1);font-size:20px;font-weight:600;padding:0 var(--s1) var(--s2)}
@@ -506,7 +508,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 27;
+const VERSIONE_APP = 28;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
