@@ -506,7 +506,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 26;
+const VERSIONE_APP = 27;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -547,7 +547,11 @@ const CAT_ICO = {
 const icoCat = c => ico(CAT_ICO[c] || (String(c).includes('HOBBY') ? 'Star' : 'Tag'));
 
 // ── AVVIO E ACCESSO ───────────────────────────────────────────
+// app installata sul computer: Edge riapre il ritorno da Microsoft come pagina nuova e perde la risposta, quindi lì l'accesso va in una finestrella
+const APP_PC = matchMedia('(display-mode: standalone)').matches && !/iPhone|iPad|Android/i.test(navigator.userAgent);
 window.addEventListener('load', async () => {
+  // dentro la finestrella dell'accesso la risposta la legge l'app che l'ha aperta: qui non si fa niente
+  if (window.opener && window.opener !== window && /[#&](code|error)=/.test(location.hash)) return;
   applyTheme();
   document.querySelectorAll('[data-ico]').forEach(el => el.innerHTML = ico(el.dataset.ico));
   const btnLogin = document.getElementById('btnLogin');
@@ -587,13 +591,20 @@ function azzeraAccesso() {
 async function login() {
   const btn = document.getElementById('btnLogin');
   btn.disabled=true; btn.textContent='Connessione…'; localStorage.setItem('accessoTentato', Date.now());
-  try { await msalInstance.loginRedirect({ scopes:SCOPES }); }
-  catch(e) { showAuthError('Errore di accesso: '+e.message); btn.disabled=false; btn.textContent='Accedi con Microsoft'; }
+  try {
+    if (!APP_PC) { await msalInstance.loginRedirect({ scopes:SCOPES }); return; }
+    const r = await msalInstance.loginPopup({ scopes:SCOPES });
+    accessToken = r.accessToken; msalInstance.setActiveAccount(r.account); checkSetup();
+  }
+  catch(e) { showAuthError('Errore di accesso: '+(e.errorCode ? e.errorCode+' – ' : '')+e.message); btn.disabled=false; btn.textContent='Accedi con Microsoft'; }
 }
 function showAuthError(msg) { document.getElementById('authError').textContent = msg; }
 async function getToken() {
   try { const r=await msalInstance.acquireTokenSilent({scopes:SCOPES}); accessToken=r.accessToken; }
-  catch(e) { await msalInstance.acquireTokenRedirect({scopes:SCOPES}); }
+  catch(e) {
+    if (!APP_PC) { await msalInstance.acquireTokenRedirect({scopes:SCOPES}); return; }
+    const r = await msalInstance.acquireTokenPopup({scopes:SCOPES}); accessToken = r.accessToken;
+  }
 }
 function esci() {
   msalInstance.logoutRedirect({ postLogoutRedirectUri: msalConfig.auth.redirectUri });
