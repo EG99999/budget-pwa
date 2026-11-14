@@ -283,6 +283,10 @@ body:has(> .composer) .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 
 .toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;z-index:60;background:rgba(44,44,46,.96);color:#fff;font-size:15px;padding:var(--s1) var(--s2);border-radius:24px;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+/* scritture in coda verso il file: un segnalino piccolo in alto finché Excel non conferma, rosso se non ci riesce */
+.stato-coda{position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translate(-50%,-8px);opacity:0;pointer-events:none;z-index:61;background:rgba(44,44,46,.92);color:#fff;font-size:13px;padding:6px 14px;border-radius:16px;max-width:calc(100% - 32px);transition:opacity .2s,transform .2s}
+.stato-coda.show{opacity:1;transform:translate(-50%,0)}
+.stato-coda.err{background:var(--neg);pointer-events:auto;cursor:pointer;font-size:14px;padding:10px 16px}
 
 /* accesso, configurazione, aggiornamento */
 .screen{position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s2);padding:var(--s4);text-align:center}
@@ -508,7 +512,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 29;
+const VERSIONE_APP = 30;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -660,39 +664,79 @@ function startApp() {
   const t = oggiApp(); S.movM = {y:t.getFullYear(), m:t.getMonth()}; S.budM = {y:t.getFullYear(), m:t.getMonth()};
   go(S.view);
   anniDisponibili().then(() => drawSide()).catch(() => {});
+  if (_coda.length) { statoCoda(); vaiCoda(); } // scritture rimaste dall'ultima volta
 }
 
 // ── GRAPH API ─────────────────────────────────────────────────
-async function apiGet(path) {
-  await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {headers:{Authorization:'Bearer '+accessToken}});
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+// sessione sul file Excel: col file tenuto aperto le chiamate sono più veloci e una lettura vede subito le scritture appena fatte
+// (senza sessione Excel salva in differita e una rilettura immediata può trovare ancora la versione vecchia)
+const _sess = {};
+function sessioneFile(fid){
+  const s = _sess[fid];
+  if (s && Date.now() - s.t < 4 * 60000) return s.p;
+  const p = fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fid}/workbook/createSession`, {method:'POST', headers:{Authorization:'Bearer '+accessToken, 'Content-Type':'application/json'}, body:JSON.stringify({persistChanges:true})})
+    .then(r => r.ok ? r.json() : null).then(j => (j && j.id) || null).catch(() => null);
+  _sess[fid] = {p, t:Date.now()};
+  return p;
 }
-async function apiPost(path, body) {
+async function graph(method, path, body){
   await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {method:'POST', headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const m = path.match(/^\/me\/drive\/items\/([^/]+)\/workbook\//), fid = m && m[1];
+  const chiama = sid => { const h = {Authorization:'Bearer '+accessToken}; if (body !== undefined) h['Content-Type'] = 'application/json'; if (sid) h['workbook-session-id'] = sid;
+    return fetch('https://graph.microsoft.com/v1.0'+path, {method, headers:h, body: body === undefined ? undefined : JSON.stringify(body)}); };
+  let sid = fid ? await sessioneFile(fid) : null, res = await chiama(sid);
+  // sessione scaduta o rifiutata: se ne apre una nuova e si riprova una volta
+  if (sid && !res.ok && /session/i.test(await res.clone().text())) { delete _sess[fid]; sid = await sessioneFile(fid); res = await chiama(sid); }
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  if (fid && _sess[fid]) _sess[fid].t = Date.now();
+  return res.status === 204 || method === 'DELETE' ? null : res.json();
 }
-async function apiPatch(path, body) {
-  await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {method:'PATCH', headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-async function apiDelete(path) {
-  await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0'+path, {method:'DELETE', headers:{Authorization:'Bearer '+accessToken}});
-  if (!res.ok) throw new Error(await res.text());
-}
+async function apiGet(path) { return graph('GET', path); }
+async function apiPost(path, body) { await attendiCoda(); return graph('POST', path, body); }
+async function apiPatch(path, body) { await attendiCoda(); return graph('PATCH', path, body); }
+async function apiDelete(path) { await attendiCoda(); return graph('DELETE', path); }
 async function readRange(sheetName, address) {
-  const cfg = getConfig(); await getToken();
-  const s = encodeURIComponent(sheetName);
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${cfg.fileId}/workbook/worksheets('${s}')/range(address='${address}')`, {headers:{Authorization:'Bearer '+accessToken}});
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return graph('GET', `/me/drive/items/${getConfig().fileId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${address}')`);
 }
+
+// scritture dei movimenti in coda, una alla volta: i conti si aggiornano subito sui dati in memoria e il file segue dietro;
+// la coda resta salvata nel browser finché Excel non conferma, così una voce non si perde se chiudi l'app
+const CODA_K = 'codaScritture';
+let _coda = (() => { try { return JSON.parse(localStorage.getItem(CODA_K)) || []; } catch(e) { return []; } })(), _codaVa = false, _codaErr = '', _ricaricaDopoCoda = false;
+const salvaCoda = () => { try { localStorage.setItem(CODA_K, JSON.stringify(_coda)); } catch(e) {} };
+async function attendiCoda(){ while (_coda.length && !_codaErr) await new Promise(r => setTimeout(r, 300)); }
+function accoda(op){ _coda.push(op); salvaCoda(); statoCoda(); vaiCoda(); }
+async function vaiCoda(){
+  if (_codaVa) return; _codaVa = true; _codaErr = '';
+  while (_coda.length) {
+    const op = _coda[0], base = `/me/drive/items/${op.fid}/workbook/tables/${op.tab}/rows`;
+    statoCoda();
+    try {
+      if (op.tipo === 'add') await graph('POST', base, {values:op.righe});
+      else if (op.tipo === 'patch') await graph('PATCH', `${base}/itemAt(index=${op.i})`, {values:[op.v]});
+      else await graph('DELETE', `${base}/itemAt(index=${op.i})`);
+      _coda.shift(); salvaCoda();
+    } catch(e) {
+      op.tent = (op.tent || 0) + 1; salvaCoda();
+      if (op.tent < 3) { await new Promise(r => setTimeout(r, 1500 * op.tent)); continue; }
+      _codaErr = String(e.message || e).slice(0, 160); break;
+    }
+  }
+  _codaVa = false; statoCoda();
+  // righe lette dal file mentre la coda non era finita: ora si rileggono per avere anche quelle
+  if (!_coda.length && _ricaricaDopoCoda) { _ricaricaDopoCoda = false; invalidateCache(); render(); }
+}
+function statoCoda(){
+  let el = $('#statoCoda');
+  if (!el) { el = document.createElement('button'); el.id = 'statoCoda'; el.onclick = () => { if (_codaErr) { _coda.forEach(o => o.tent = 0); vaiCoda(); } }; document.body.append(el); }
+  const n = _coda.length;
+  el.className = 'stato-coda' + (n ? ' show' : '') + (_codaErr ? ' err' : '');
+  el.textContent = _codaErr ? `Non salvato nel file (${n}): tocca per riprovare` : n ? 'Salvo nel file…' : '';
+  el.title = _codaErr;
+}
+// righe in memoria come le legge righeDelFile; quante righe ha la tabella, per dare l'indice giusto a una riga nuova
+const _nRighe = {};
+const rigaDaValori = (i, v) => ({_index:i, senso:v[0], tipologia:v[1], valore:parseFloat(v[2])||0, cadenza:v[3], descrizione:v[4], metodo:v[5], mezzo:v[6], data:parseDate(v[7]), mese:v[8]});
 
 // ── DATI ──────────────────────────────────────────────────────
 let cachedRows = null, cacheTime = 0;
@@ -701,6 +745,8 @@ let _righeAnni = {}; // spese degli altri anni, per gli scontrini
 
 async function righeDelFile(fileId, tabella){
   const data = await apiGet(`/me/drive/items/${fileId}/workbook/tables/${tabella||'TblTransazioni'}/rows`);
+  _nRighe[fileId + '|' + (tabella||'TblTransazioni')] = (data.value||[]).length;
+  if (_coda.some(o => o.fid === fileId)) _ricaricaDopoCoda = true;
   return (data.value||[]).map(r=>({
     _index:r.index, senso:r.values[0][0], tipologia:r.values[0][1],
     valore:parseFloat(r.values[0][2])||0, cadenza:r.values[0][3],
@@ -710,7 +756,8 @@ async function righeDelFile(fileId, tabella){
 }
 async function getTransazioni() {
   const now = Date.now();
-  if (cachedRows && now-cacheTime < 60000) return cachedRows;
+  // con scritture ancora in coda la copia in memoria è più aggiornata del file: non si rilegge
+  if (cachedRows && (now-cacheTime < 60000 || _coda.length)) return cachedRows;
   const cfg = getConfig();
   cachedRows = await righeDelFile(cfg.fileId, cfg.tableName);
   cacheTime = now;
@@ -2586,11 +2633,13 @@ async function applicaGruppo(i){
     for (const v of g.voci) for (const r of v.righe) {
       const desc = g.rinomina && baseNome(r.descrizione) !== baseNome(g.nome) ? nuovoNome(r.descrizione, g.nome, protette) : r.descrizione;
       if (r.tipologia === g.categoria && desc === r.descrizione) continue;
-      await apiPatch(`${wb()}/tables/${cfg.tableName}/rows/itemAt(index=${r._index})`, {values:[[r.senso, g.categoria, r.valore, r.cadenza, desc, r.metodo, r.mezzo, r.data, r.mese || MESI_IT[+String(r.data).slice(5,7) - 1]]]});
+      accoda({tipo:'patch', fid:cfg.fileId, tab:cfg.tableName, i:r._index, v:[r.senso, g.categoria, r.valore, r.cadenza, desc, r.metodo, r.mezzo, r.data, r.mese || MESI_IT[+String(r.data).slice(5,7) - 1]]});
+      // la stessa riga anche nella copia in memoria, se è un oggetto diverso
+      const c = (cachedRows || []).find(x => x._index === r._index); if (c) { c.tipologia = g.categoria; c.descrizione = desc; }
       r.tipologia = g.categoria; r.descrizione = desc; n++;
     }
-    g.fatto = n; invalidateCache(); toast(n === 1 ? '1 riga cambiata' : `${n} righe cambiate`);
-  } catch(e) { g.errore = `Cambiate ${n} righe, poi errore: ${String(e.message).slice(0, 160)}`; invalidateCache(); }
+    g.fatto = n; toast(n === 1 ? '1 riga cambiata' : `${n} righe cambiate`);
+  } catch(e) { g.errore = `Cambiate ${n} righe, poi errore: ${String(e.message).slice(0, 160)}`; }
   g.busy = false; render();
 }
 
@@ -3525,12 +3574,11 @@ function vediCategoriaInMovimenti(){ const {cat, per, y, m} = CS; closeSheet(); 
 async function eliminaTransazione(rowIndex) {
   const b = $('#delBtn');
   if (!b.dataset.sure) { b.dataset.sure='1'; b.textContent='Tocca di nuovo per eliminare'; setTimeout(()=>{ if(b.isConnected){ delete b.dataset.sure; b.textContent='Elimina'; } },3000); return; }
-  b.disabled=true; b.textContent='Eliminazione…';
-  try {
-    const cfg=getConfig();
-    await apiDelete(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows/itemAt(index=${rowIndex})`);
-    invalidateCache(); closeSheet(); toast('Movimento eliminato'); render();
-  } catch(e) { toast('Errore: '+e.message); b.disabled=false; b.textContent='Elimina'; }
+  const cfg = getConfig(), chiave = cfg.fileId + '|' + cfg.tableName;
+  accoda({tipo:'del', fid:cfg.fileId, tab:cfg.tableName, i:rowIndex});
+  // le righe sotto quella tolta salgono di una, come nel file
+  if (cachedRows) { cachedRows = cachedRows.filter(r => r._index !== rowIndex); cachedRows.forEach(r => { if (r._index > rowIndex) r._index--; }); if (_nRighe[chiave] != null) _nRighe[chiave]--; }
+  closeSheet(); toast('Movimento eliminato'); render();
 }
 
 let A = null;
@@ -3665,15 +3713,18 @@ async function salvaTransazione() {
   const meseIdx = parseInt(A.date.split('-')[1])-1;
   const rowValues = [A.s, A.cat, v, A.cad, A.desc, A.met, A.mezzo, A.date, MESI_IT[meseIdx]];
   const modifica = A.edit!=null, idx = A.edit, senso = A.s;
-  A.busy = true; drawAdd();
-  try {
-    const cfg = getConfig();
-    if (modifica) await apiPatch(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows/itemAt(index=${idx})`,{values:[rowValues]});
-    else await apiPost(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`,{values:[rowValues]});
-    invalidateCache(); closeSheet();
-    toast(modifica ? 'Modifiche salvate' : senso==='ENTRATA' ? `Entrata di ${fmt(Math.abs(v))} salvata` : `Uscita di ${fmt(Math.abs(v))} salvata`);
-    render();
-  } catch(e) { toast('Errore: '+e.message); if (A) { A.busy=false; drawAdd(); } }
+  // subito nei conti in memoria, nel file dietro con la coda
+  const cfg = getConfig(), chiave = cfg.fileId + '|' + cfg.tableName;
+  if (modifica) {
+    accoda({tipo:'patch', fid:cfg.fileId, tab:cfg.tableName, i:idx, v:rowValues});
+    if (cachedRows) { const k = cachedRows.findIndex(r => r._index === idx); if (k >= 0) cachedRows[k] = rigaDaValori(idx, rowValues); else _ricaricaDopoCoda = true; }
+  } else {
+    accoda({tipo:'add', fid:cfg.fileId, tab:cfg.tableName, righe:[rowValues]});
+    if (cachedRows && _nRighe[chiave] != null) cachedRows.push(rigaDaValori(_nRighe[chiave]++, rowValues)); else _ricaricaDopoCoda = true;
+  }
+  closeSheet();
+  toast(modifica ? 'Modifiche salvate' : senso==='ENTRATA' ? `Entrata di ${fmt(Math.abs(v))} salvata` : `Uscita di ${fmt(Math.abs(v))} salvata`);
+  render();
 }
 
 // ── AGGIORNAMENTI E SERVICE WORKER ────────────────────────────
