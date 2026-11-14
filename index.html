@@ -512,7 +512,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 30;
+const VERSIONE_APP = 31;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -716,6 +716,7 @@ async function vaiCoda(){
       else if (op.tipo === 'patch') await graph('PATCH', `${base}/itemAt(index=${op.i})`, {values:[op.v]});
       else await graph('DELETE', `${base}/itemAt(index=${op.i})`);
       _coda.shift(); salvaCoda();
+      if (op.svuota) { op.svuota.forEach(c => { if (c === 'bollette') bolletteCache = null; if (c === 'scontrini') { scontriniCache = null; articoliCache = null; } if (c === 'anni') { _righeAnni = {}; _anniCache = null; } }); _ricaricaDopoCoda = true; }
     } catch(e) {
       op.tent = (op.tent || 0) + 1; salvaCoda();
       if (op.tent < 3) { await new Promise(r => setTimeout(r, 1500 * op.tent)); continue; }
@@ -737,6 +738,19 @@ function statoCoda(){
 // righe in memoria come le legge righeDelFile; quante righe ha la tabella, per dare l'indice giusto a una riga nuova
 const _nRighe = {};
 const rigaDaValori = (i, v) => ({_index:i, senso:v[0], tipologia:v[1], valore:parseFloat(v[2])||0, cadenza:v[3], descrizione:v[4], metodo:v[5], mezzo:v[6], data:parseDate(v[7]), mese:v[8]});
+// movimenti nuovi o cambiati: in coda verso il file e subito nei conti in memoria (se sono del file aperto)
+function aggiungiMovimenti(righe, fid){
+  const cfg = getConfig(); fid = fid || cfg.fileId;
+  if (fid !== cfg.fileId) { accoda({tipo:'add', fid, tab:cfg.tableName, righe, svuota:['anni']}); return; }
+  accoda({tipo:'add', fid, tab:cfg.tableName, righe});
+  const chiave = fid + '|' + cfg.tableName;
+  if (cachedRows && _nRighe[chiave] != null) righe.forEach(v => { const r = rigaDaValori(_nRighe[chiave]++, v); if (r.valore !== 0) cachedRows.push(r); }); else _ricaricaDopoCoda = true;
+}
+function cambiaMovimento(i, v){
+  const cfg = getConfig();
+  accoda({tipo:'patch', fid:cfg.fileId, tab:cfg.tableName, i, v});
+  const k = (cachedRows||[]).findIndex(r => r._index === i); if (k >= 0) cachedRows[k] = rigaDaValori(i, v); else _ricaricaDopoCoda = true;
+}
 
 // ── DATI ──────────────────────────────────────────────────────
 let cachedRows = null, cacheTime = 0;
@@ -1692,15 +1706,10 @@ function chiediIncasso(importo) {
   <button class="btn" id="btnIncasso" onclick="registraCoabIncasso(${importo})">Registra l'entrata</button></div>`);
 }
 async function registraCoabIncasso(importo) {
-  const {y,m}=S.coabM, b=$('#btnIncasso');
-  if (b) { b.disabled=true; b.textContent='Registrazione…'; }
+  const {y,m}=S.coabM;
   const dataStr=isoDi(new Date(y,m,28));
-  const rowValues=['ENTRATA','CREDITO',importo,'SECCA','Coabitazione Aurora Carminati','ELETTRONICO','BONIFICO',dataStr,MESI_IT[m]];
-  try {
-    const cfg=getConfig();
-    await apiPost(`/me/drive/items/${cfg.fileId}/workbook/tables/${cfg.tableName}/rows`,{values:[rowValues]});
-    invalidateCache(); closeSheet(); toast('Incasso registrato'); render();
-  } catch(e) { toast('Errore: '+e.message); if (b) { b.disabled=false; b.textContent="Registra l'entrata"; } }
+  aggiungiMovimenti([['ENTRATA','CREDITO',importo,'SECCA','Coabitazione Aurora Carminati','ELETTRONICO','BONIFICO',dataStr,MESI_IT[m]]]);
+  closeSheet(); toast('Incasso registrato'); render();
 }
 async function apriPDFStorico() {
   const {y,m}=S.coabM;
@@ -2164,22 +2173,16 @@ async function aggiungiMancanti(){
   const L = ES.r.mancanti.filter(m => m.sel && !m.altroAnno), b = $('#btnAggiungi');
   if (!L.length) return;
   if (L.some(m => !m.cat)) { toast('Scegli la categoria di ogni movimento spuntato'); return; }
-  if (b) { b.disabled = true; b.textContent = 'Aggiungo…'; }
   const righe = L.map(m => [m.importo < 0 ? 'USCITA' : 'ENTRATA', m.cat, m.importo, m.cadenza, String(m.descrizione).toUpperCase(), m.mezzo==='CONTANTI' ? 'CONTANTI' : 'ELETTRONICO', m.mezzo, m.data, MESI_IT[+m.data.slice(5,7) - 1]]);
-  try {
-    const cfg = getConfig();
-    await apiPost(`${wb()}/tables/${cfg.tableName}/rows`, {values:righe});
-    invalidateCache();
-    ES.r.mancanti = ES.r.mancanti.filter(m => !L.includes(m));
-    toast(L.length === 1 ? '1 movimento aggiunto' : `${L.length} movimenti aggiunti`);
-  } catch(e) { toast('Errore: ' + e.message.slice(0,160)); }
+  aggiungiMovimenti(righe);
+  ES.r.mancanti = ES.r.mancanti.filter(m => !L.includes(m));
+  toast(L.length === 1 ? '1 movimento aggiunto' : `${L.length} movimenti aggiunti`);
   render();
 }
 async function correggiImporto(i){
   const x = ES.r.diversi[i], r = x.r, cfg = getConfig();
   const v = [r.senso || (x.m.importo < 0 ? 'USCITA' : 'ENTRATA'), r.tipologia, x.m.importo, r.cadenza, r.descrizione, r.metodo, r.mezzo, r.data, r.mese || MESI_IT[+r.data.slice(5,7) - 1]];
-  try { await apiPatch(`${wb()}/tables/${cfg.tableName}/rows/itemAt(index=${r._index})`, {values:[v]}); invalidateCache(); x.m.corretto = true; toast('Importo corretto'); }
-  catch(e) { toast('Errore: ' + e.message.slice(0,160)); }
+  cambiaMovimento(r._index, v); r.valore = x.m.importo; x.m.corretto = true; toast('Importo corretto');
   render();
 }
 
@@ -2298,15 +2301,14 @@ async function salvaScontrino(x){
     let spesa = 'solo storico prezzi';
     if (x.scelta === 'collega') spesa = chiaveSpesa(rigaDi(x));
     else if (x.scelta === 'nuova') {
-      if (!x.spesaFatta) { const riga = rigaDaScontrino(x); await apiPost(`${wb(id)}/tables/${cfg.tableName}/rows`, {values:[riga]}); x.spesaFatta = `${riga[7]}|${riga[2]}|${riga[4]}`; invalidateCache(); _righeAnni = {}; _anniCache = null; }
+      if (!x.spesaFatta) { const riga = rigaDaScontrino(x); aggiungiMovimenti([riga], id); x.spesaFatta = `${riga[7]}|${riga[2]}|${riga[4]}`; _righeAnni = {}; _anniCache = null; }
       spesa = x.spesaFatta;
     }
     if (!x.rigaFatta) {
-      await apiPost(`${wb(id)}/tables/${TAB_SCONTRINI.nome}/rows`, {values:[[x.id, d.data, d.ora, d.negozio, d.totale, d.pagato || d.totale, d.pagamento, d.articoli.length, x.foto, spesa, new Date().toISOString().slice(0,16).replace('T',' ')]]});
+      accoda({tipo:'add', fid:id, tab:TAB_SCONTRINI.nome, righe:[[x.id, d.data, d.ora, d.negozio, d.totale, d.pagato || d.totale, d.pagamento, d.articoli.length, x.foto, spesa, new Date().toISOString().slice(0,16).replace('T',' ')]], svuota:['scontrini']});
       x.rigaFatta = true;
     }
-    if (d.articoli.length) await apiPost(`${wb(id)}/tables/${TAB_ARTICOLI.nome}/rows`, {values: d.articoli.map(a => { const [pu, puU] = prezzoUnitario(a); return [x.id, d.data, d.negozio, a.prodotto, a.marca, a.categoria, a.sottocategoria, +a.quantita || 1, a.unita, +a.contenuto || 0, a.contenuto_unita || '', +a.prezzo || 0, +a.sconto || 0, Math.round(pu*10000)/10000, puU, a.testo]; })});
-    scontriniCache = null; articoliCache = null;
+    if (d.articoli.length) accoda({tipo:'add', fid:id, tab:TAB_ARTICOLI.nome, svuota:['scontrini'], righe: d.articoli.map(a => { const [pu, puU] = prezzoUnitario(a); return [x.id, d.data, d.negozio, a.prodotto, a.marca, a.categoria, a.sottocategoria, +a.quantita || 1, a.unita, +a.contenuto || 0, a.contenuto_unita || '', +a.prezzo || 0, +a.sconto || 0, Math.round(pu*10000)/10000, puU, a.testo]; })});
     x.stato = 'salvato'; x.blob = null; x.file = null;
     aggiornaScontrini();
     return true;
@@ -3426,21 +3428,21 @@ async function salvaBolletta(){
     BL.allegati = []; BL.nomeFile = nomeFile;
     if (daSalvare.length) {
       const id = await idFileBollette();
-      await apiPost(`/me/drive/items/${id}/workbook/tables/TblBollette/rows`, {values: daSalvare.map(u => [u.tipo === 'gas' ? 'GAS' : 'LUCE', u.anno, u.mese, u.periodo_da || '', u.periodo_al || '', u.consumo, UT[u.tipo].unita, u.stimato ? 'SI' : '',
+      accoda({tipo:'add', fid:id, tab:'TblBollette', svuota:['bollette'], righe: daSalvare.map(u => [u.tipo === 'gas' ? 'GAS' : 'LUCE', u.anno, u.mese, u.periodo_da || '', u.periodo_al || '', u.consumo, UT[u.tipo].unita, u.stimato ? 'SI' : '',
         u.totale, u.tasse, u.quota_consumi, Math.round((u.totale - u.tasse - u.quota_consumi) * 100) / 100, u.consumo ? Math.round(u.totale / u.consumo * 1e6) / 1e6 : '', u.consumo ? Math.round(u.quota_consumi / u.consumo * 1e6) / 1e6 : '',
         u.indice || '', u.indice ? u.indice_nome : '', d.numero || '', d.data_emissione || '', nomeFile, 'caricata dall\'app',
         u.vendita, u.rete, u.accise, u.iva, Math.round((u.totale - u.vendita - u.rete - u.accise - u.iva) * 100) / 100, u.oneri_sistema, u.quota_fissa || '', u.prezzo_vendita || ''])});
       daSalvare.forEach(u => u.salva = false);
     }
     if (spese.length) {
-      const cfg = getConfig(), rows = cachedRows || [], dt = dataSpesa(d), mm = MESI_IT[+dt.slice(5, 7) - 1];
-      await apiPost(`${wb()}/tables/${cfg.tableName}/rows`, {values: spese.map(u => {
+      const rows = cachedRows || [], dt = dataSpesa(d), mm = MESI_IT[+dt.slice(5, 7) - 1];
+      aggiungiMovimenti(spese.map(u => {
         const ult = [...rows].reverse().find(r => String(r.descrizione||'').toUpperCase().includes(UT[u.tipo].segno));
         return ['USCITA', 'CASA', -Math.abs(u.totale), (ult && ult.cadenza) || 'MENSILE', `${UT[u.tipo].segno} ${UT[u.tipo].desc} ${mm} ${dt.slice(0, 4)}`, (ult && ult.metodo) || 'ELETTRONICO', (ult && ult.mezzo) || 'ADDEBITO CONTO', dt, mm];
-      })});
-      spese.forEach(u => u.aggiungi = false); invalidateCache();
+      }));
+      spese.forEach(u => u.aggiungi = false);
     }
-    bolletteCache = null; closeSheet(); BL = {fase:'scelta'}; toast('Bolletta salvata');
+    closeSheet(); BL = {fase:'scelta'}; toast('Bolletta salvata');
   } catch(e) { toast('Errore: ' + String(e.message).slice(0, 160)); if (b) { b.disabled = false; b.textContent = 'Riprova'; } return; }
   if (S.view === 'bollette') render();
 }
@@ -3714,14 +3716,7 @@ async function salvaTransazione() {
   const rowValues = [A.s, A.cat, v, A.cad, A.desc, A.met, A.mezzo, A.date, MESI_IT[meseIdx]];
   const modifica = A.edit!=null, idx = A.edit, senso = A.s;
   // subito nei conti in memoria, nel file dietro con la coda
-  const cfg = getConfig(), chiave = cfg.fileId + '|' + cfg.tableName;
-  if (modifica) {
-    accoda({tipo:'patch', fid:cfg.fileId, tab:cfg.tableName, i:idx, v:rowValues});
-    if (cachedRows) { const k = cachedRows.findIndex(r => r._index === idx); if (k >= 0) cachedRows[k] = rigaDaValori(idx, rowValues); else _ricaricaDopoCoda = true; }
-  } else {
-    accoda({tipo:'add', fid:cfg.fileId, tab:cfg.tableName, righe:[rowValues]});
-    if (cachedRows && _nRighe[chiave] != null) cachedRows.push(rigaDaValori(_nRighe[chiave]++, rowValues)); else _ricaricaDopoCoda = true;
-  }
+  if (modifica) cambiaMovimento(idx, rowValues); else aggiungiMovimenti([rowValues]);
   closeSheet();
   toast(modifica ? 'Modifiche salvate' : senso==='ENTRATA' ? `Entrata di ${fmt(Math.abs(v))} salvata` : `Uscita di ${fmt(Math.abs(v))} salvata`);
   render();
