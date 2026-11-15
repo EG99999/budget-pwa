@@ -512,7 +512,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 31;
+const VERSIONE_APP = 32;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -1953,7 +1953,7 @@ async function vEstratto(){
   <p class="muted" style="margin-bottom:16px">Carica l'estratto scaricato dalla banca: confronto ogni movimento con il file Excel e ti dico cosa manca, cosa è diverso e cosa è segnato solo nell'app.</p>
   ${seg([['conto','Conto corrente'],['carta','Carta di credito']], ES.tipo, 'setTipoEstratto')}
   <label class="drop">${ico('FileUp')}<b>Scegli il file</b><span>PDF, Excel o CSV scaricato dalla banca</span><input type="file" accept=".pdf,.xlsx,.xls,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" onchange="leggiEstratto(this.files);this.value=''"></label>
-  <label class="btn soft" style="margin-top:8px">Oppure screenshot dell'app della banca<input type="file" accept="image/*" multiple style="display:none" onchange="leggiEstratto(this.files);this.value=''"></label>
+  <label class="btn soft" style="margin-top:8px">Oppure screenshot dell'app della banca<input type="file" accept="${ACCETTA_FOTO}" multiple style="display:none" onchange="leggiEstratto(this.files);this.value=''"></label>
   ${ES.errore?`<p class="avviso">${ico('TriangleAlert')}<span>${esc(ES.errore)}</span></p>`:''}
   <p class="note">Il file viene letto da Claude di Anthropic tramite il tuo ponte (pochi centesimi a estratto) e non viene salvato da nessuna parte. Nel file Excel non cambia nulla finché non confermi tu.</p>`;
 }
@@ -2020,7 +2020,7 @@ async function leggiEstratto(scelti){
   const tutti = scelti instanceof File ? [scelti] : [...(scelti||[])];
   if (!tutti.length) return;
   // screenshot dall'app della banca: uno o più, letti da Claude
-  const foto = tutti.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+  const foto = tutti.filter(eFoto);
   const file = tutti[0], pdf = !foto.length && (/\.pdf$/i.test(file.name) || file.type==='application/pdf');
   if (!foto.length && !pdf && !/\.(xlsx|xls|csv)$/i.test(file.name)) { ES.errore = 'Formato non riconosciuto: usa un PDF, un Excel, un CSV o degli screenshot.'; render(); return; }
   if (!foto.length && file.size > 25e6) { ES.errore = 'Il file supera i 25 MB: scarica un periodo più corto.'; render(); return; }
@@ -2189,8 +2189,8 @@ async function correggiImporto(i){
 // ── scontrini: coda di foto, lettura, abbinamento alla spesa, revisione, salvataggio
 let SC = [], SX = null, _lavori = 0;
 function aggiungiFoto(files){
-  const nuovi = [...(files||[])].filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
-  if (!nuovi.length) { toast('Scegli delle foto'); return; }
+  const nuovi = [...(files||[])].filter(f => eFoto(f) || ePdf(f));
+  if (!nuovi.length) { toast('Scegli foto o PDF degli scontrini'); return; }
   for (const f of nuovi) SC.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), nome:f.name, file:f, url:URL.createObjectURL(f), stato:'coda' });
   aggiornaScontrini(); lavoraCoda();
 }
@@ -2201,11 +2201,59 @@ function lavoraCoda(){
     leggiScontrino(x).finally(() => { _lavori--; aggiornaScontrini(); lavoraCoda(); });
   }
 }
+// formati: quello che il browser sa aprire lo apre lui; HEIC, TIFF e PDF con un lettore scaricato solo la prima volta che serve
+const ePdf = f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+const eHeic = f => /image\/hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name);
+const eTiff = f => /image\/tiff/i.test(f.type) || /\.tiff?$/i.test(f.name);
+const eFoto = f => /^image\//.test(f.type) || /\.(jpe?g|jfif|png|webp|gif|bmp|avif|hei[cf]|tiff?)$/i.test(f.name);
+// sull'iPhone «image/*» converte da solo le HEIC in JPEG: aggiungere .heic lo impedirebbe
+const ACCETTA_FOTO = /iPhone|iPad/i.test(navigator.userAgent) ? 'image/*' : 'image/*,.heic,.heif,.tif,.tiff';
+const _script = {};
+function caricaScript(src, integrity){
+  return _script[src] = _script[src] || new Promise((ok, ko) => { const t = document.createElement('script'); t.src = src; t.integrity = integrity; t.crossOrigin = 'anonymous'; t.onload = ok; t.onerror = () => { delete _script[src]; ko(new Error('non riesco a caricare il lettore di questo formato: serve la connessione')); }; document.head.appendChild(t); });
+}
+async function apriImmagine(file){
+  if (ePdf(file)) return pdfInImmagine(file);
+  try { return await createImageBitmap(file, {imageOrientation:'from-image'}); } catch(e) {}
+  try { return await new Promise((ok, ko) => { const u = URL.createObjectURL(file), i = new Image(); i.onload = () => { URL.revokeObjectURL(u); ok(i); }; i.onerror = () => { URL.revokeObjectURL(u); ko(); }; i.src = u; }); } catch(e) {}
+  if (eHeic(file)) {
+    await caricaScript('https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js', 'sha384-OTofQ0MEeiSgh62havBcemCIK0gqj809wX6UA0uPISNMRnR6NZyCdGzX3SbLrgwL');
+    const b = await heic2any({blob:file, toType:'image/jpeg', quality:0.92});
+    return createImageBitmap(Array.isArray(b) ? b[0] : b);
+  }
+  if (eTiff(file)) {
+    await caricaScript('https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js', 'sha384-RyBmXHdfZ/Uon+ud+/AqSyWpUWnKYt2tkRG/P4gWoRUGDU+qIAV3tGBPNlYTBZEF');
+    const buf = await file.arrayBuffer(), ifd = UTIF.decode(buf)[0]; UTIF.decodeImage(buf, ifd);
+    const c = document.createElement('canvas'); c.width = ifd.width; c.height = ifd.height;
+    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(UTIF.toRGBA8(ifd)), ifd.width, ifd.height), 0, 0);
+    return c;
+  }
+  throw new Error('non riesco ad aprire questo file: usa una foto o un PDF');
+}
+// PDF: le pagine (al massimo 4) una sotto l'altra in un'unica immagine larga 1400 px
+async function pdfInImmagine(file){
+  await caricaScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const doc = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  const pagine = [];
+  for (let n = 1; n <= Math.min(doc.numPages, 4); n++) pagine.push(await doc.getPage(n));
+  const v1 = pagine.map(pg => pg.getViewport({scale:1})), largo = Math.max(...v1.map(v => v.width)), altoTot = v1.reduce((t, v) => t + v.height, 0);
+  const k = Math.min(1400 / largo, Math.sqrt(15e6 / (largo * altoTot)), 4);
+  const c = document.createElement('canvas'); c.width = Math.round(largo * k); c.height = Math.round(altoTot * k);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  let y = 0;
+  for (const pg of pagine) {
+    const v = pg.getViewport({scale:k}), t = document.createElement('canvas'); t.width = Math.round(v.width); t.height = Math.round(v.height);
+    // intent 'print': disegna senza aspettare lo schermo, così va avanti anche con l'app in secondo piano
+    await pg.render({canvasContext:t.getContext('2d'), viewport:v, intent:'print'}).promise;
+    g.drawImage(t, 0, y); y += t.height;
+  }
+  doc.destroy();
+  return c;
+}
 // foto ridotta a 2000 px sul lato lungo, JPEG: basta per leggere e pesa poco
 async function comprimi(file){
-  let img;
-  try { img = await createImageBitmap(file, {imageOrientation:'from-image'}); }
-  catch(e) { img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('formato non supportato: salva la foto in JPEG')); i.src = URL.createObjectURL(file); }); }
+  const img = await apriImmagine(file);
   const w = img.width, h = img.height;
   const taglia = async (y, alto, k, q) => {
     const c = document.createElement('canvas'); c.width = Math.round(w*k); c.height = Math.round(alto*k);
@@ -2239,7 +2287,7 @@ async function leggiScontrino(x){
   try {
     const [rows, art] = await Promise.all([getTransazioni(), getArticoli().catch(() => []), getScontrini().catch(() => [])]);
     const foto = await comprimi(x.file);
-    x.blob = foto.archivio;
+    x.blob = foto.archivio; URL.revokeObjectURL(x.url); x.url = URL.createObjectURL(x.blob);
     const prodotti = [], visti = new Set(), sotto = new Set();
     for (const a of [...art].reverse()) { const k = `${a.prodotto} | ${a.marca} | ${a.sotto}`; if (a.prodotto && !visti.has(k)) { visti.add(k); prodotti.push(k); } if (a.sotto) sotto.add(a.sotto); }
     x.d = await leggiConClaude('/scontrino', { media_type:'image/jpeg', immagini: await Promise.all(foto.pezzi.map(aBase64)), categorie: tutteCat(rows), prodotti: prodotti.slice(0, 400), sottocategorie: [...sotto] });
@@ -2337,7 +2385,7 @@ function codaHtml(){
   return `<h2 class="gh">Caricati ora<span class="muted" style="font-size:16px;font-weight:400">${fatti} su ${SC.length}</span></h2>
   ${auto ? `<button class="btn" style="margin-bottom:16px" onclick="salvaControllati()">Salva ${auto === 1 ? 'quello controllato' : `i ${auto} controllati`}</button>` : ''}
   <div class="list">${SC.map(x => `<button class="row" onclick="${x.stato === 'pronto' ? `apriScontrino('${x.id}')` : x.stato === 'errore' ? `riprovaScontrino('${x.id}')` : ''}" ${x.stato === 'pronto' || x.stato === 'errore' ? '' : 'disabled'}>
-    <img class="thumb" src="${x.url}" alt="">
+    <img class="thumb" src="${x.url}" alt="" onerror="this.style.visibility='hidden'">
     <span class="row-main"><span class="row-title">${esc(x.d && x.d.negozio ? x.d.negozio : x.nome)}</span><span class="row-sub">${sub(x)}</span></span>
     ${x.stato === 'lettura' || x.stato === 'salvataggio' ? '<span class="spinner" style="width:16px;height:16px"></span>' : x.d && x.d.leggibile ? `<span class="amt">${fmt(x.d.totale)}</span>` : x.stato === 'errore' ? `<span class="link" style="font-size:15px">Riprova</span>` : ''}
   </button>`).join('')}</div>
@@ -2355,7 +2403,7 @@ async function vScontrini(){
   const L = Array.isArray(sc) ? [...sc].sort((a, b) => String(b.data).localeCompare(String(a.data))) : [];
   const spesa = spesaLetturaMese();
   return `<h1 class="lt">Scontrini</h1>
-  <label class="drop" id="drop">${ico('ReceiptText')}<b>Carica le foto degli scontrini</b><span>Anche tante insieme: le leggo due alla volta</span><input type="file" accept="image/*" multiple onchange="aggiungiFoto(this.files);this.value=''"></label>
+  <label class="drop" id="drop">${ico('ReceiptText')}<b>Carica le foto degli scontrini</b><span>Foto di ogni formato o PDF, anche tanti insieme: li leggo due alla volta</span><input type="file" accept="${ACCETTA_FOTO},application/pdf,.pdf" multiple onchange="aggiungiFoto(this.files);this.value=''"></label>
   <p class="note">Claude legge negozio, data, articoli e prezzi (da 1 a 8 centesimi a scontrino, secondo quanto è lungo), li abbina alla spesa già nel file e tiene lo storico dei prezzi. Le foto vanno nella cartella Scontrini accanto al file Excel.${spesa ? ` Letture di questo mese su questo dispositivo: ${usd(spesa)}.` : ''}</p>
   <div id="coda">${codaHtml()}</div>
   <div class="list" style="margin-top:32px"><button class="row" onclick="go('prezzi','push')"><span class="ic">${ico('ChartLine')}</span><span class="row-main">Prezzi e inflazione</span>${chev()}</button></div>
@@ -2836,7 +2884,7 @@ async function vBollette(){
   const mesiOrd = [...new Set(L.map(b => chiaveMese(b.anno, b.mese)))].sort((a, b) => b - a);
   return `<h1 class="lt">Bollette</h1>
   <label class="drop" id="dropBol">${ico('FileUp')}<b>Carica il PDF della bolletta</b><span>Dai file del telefono o del computer</span><input type="file" accept="application/pdf,.pdf" onchange="leggiBolletta(this.files);this.value=''"></label>
-  <label class="btn soft" style="margin-top:8px">Oppure foto delle pagine<input type="file" accept="image/*" multiple style="display:none" onchange="leggiBolletta(this.files);this.value=''"></label>
+  <label class="btn soft" style="margin-top:8px">Oppure foto delle pagine<input type="file" accept="${ACCETTA_FOTO}" multiple style="display:none" onchange="leggiBolletta(this.files);this.value=''"></label>
   ${BL.fase === 'lettura' ? `<div class="card" style="margin-top:16px"><div class="loading" style="padding:16px 0"><span class="spinner"></span>Claude sta leggendo la bolletta</div></div>` : ''}
   ${BL.errore ? `<p class="avviso">${ico('TriangleAlert')}<span>${esc(BL.errore)}</span></p>` : ''}
   <p class="note">La bolletta viene letta da Claude (5-9 centesimi), controlli i valori, poi va nel file GRAFICO BOLLETTE e il PDF nella cartella delle utenze.</p>
@@ -3353,7 +3401,7 @@ async function apriPdfBolletta(nomeFile){
 // lettura e revisione
 async function leggiBolletta(scelti){
   const tutti = [...(scelti||[])]; if (!tutti.length) return;
-  const pdf = tutti.find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf'), foto = tutti.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+  const pdf = tutti.find(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf'), foto = tutti.filter(eFoto);
   if (!pdf && !foto.length) { BL = {fase:'scelta', errore:'Scegli un PDF o delle foto della bolletta.'}; render(); return; }
   if (pdf && pdf.size > 25e6) { BL = {fase:'scelta', errore:'Il PDF supera i 25 MB.'}; render(); return; }
   BL = {fase:'lettura'}; if (S.view === 'bollette') render();
