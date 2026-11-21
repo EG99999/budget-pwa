@@ -512,7 +512,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 32;
+const VERSIONE_APP = 33;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -778,7 +778,7 @@ async function getTransazioni() {
   return cachedRows;
 }
 function invalidateCache() { cachedRows=null; cacheTime=0; }
-function invalidaTutto() { invalidateCache(); budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; _righeAnni={}; bolletteCache=null; }
+function invalidaTutto() { invalidateCache(); _patr=null; budgetCache=null; casaCache=null; cfoCache=null; serviziCache=null; scontriniCache=null; articoliCache=null; _anniCache=null; _righeAnni={}; bolletteCache=null; }
 
 async function getBudget() {
   if (!budgetCache) { const d = await readRange('BUDGET MASTER','B4:R32'); budgetCache = d.values; }
@@ -890,6 +890,7 @@ const VIEWS = {
   oggi:{t:'Riepilogo',r:vOggi},
   movimenti:{t:'Movimenti',r:vMov,after:drawMov,w:'stretto',act:()=>`<button class="icon-btn" aria-label="Importa l'estratto conto" title="Importa l'estratto conto" onclick="go('estratto','push')">${ico('FileUp')}</button><button class="icon-btn" aria-label="Esporta CSV" onclick="exportCSV()">${ico('Download')}</button>`},
   budget:{t:'Budget',r:vBudget},
+  patrimonio:{t:'Patrimonio',r:vPatrimonio,parent:'analisi',w:'stretto'},
   analisi:{t:'Analisi',r:vAnalisi},
   andamento:{t:'Andamento',r:vAndamento,parent:'analisi'},
   salute:{t:'Salute finanziaria',r:vSalute,parent:'analisi'},
@@ -989,7 +990,7 @@ function drawSide(){
   $('#side').innerHTML = `<div class="side-head"><span class="app-ic">${ico('Wallet')}</span>Budget</div>
     ${anni.length > 1 ? `<div class="chips side-anni" role="group" aria-label="Anno">${anni.map(y => `<button class="chip ${+y===aa?'on':''}" onclick="cambiaAnno(${y})" aria-pressed="${+y===aa}">${y}</button>`).join('')}</div>` : ''}
     <button class="btn" onclick="openAdd()" title="Nuova voce (tasto N)" aria-keyshortcuts="N">${ico('Plus')}Nuova voce</button>
-    ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}
+    ${it('oggi','LayoutDashboard','Riepilogo')}${it('movimenti','List','Movimenti')}${it('budget','ChartPie','Budget')}${it('patrimonio','Landmark','Patrimonio')}
     <h3>Analisi</h3>
     ${it('consulente','MessageCircle','Consulente')}${it('andamento','ChartColumn','Andamento')}${it('anni','History','Negli anni')}${it('salute','Activity','Salute finanziaria')}${it('uniforma','Combine','Uniforma')}${it('casa','House','Casa')}${it('bollette','Zap','Bollette')}${it('buste','Briefcase','Buste paga')}
     ${it('abbonamenti','Repeat','Abbonamenti')}${it('coab','Users','Coabitazione')}
@@ -1133,8 +1134,8 @@ function chiediPiano(perdita){
 }
 async function vOggi(){
   const rows = await getTransazioni();
-  const [rb, rc, ra] = await Promise.allSettled([getBudget(), getCfo(), getAbbonamenti()]);
-  const bud = rb.status==='fulfilled' ? rb.value : null, cfo = rc.status==='fulfilled' ? rc.value : null, abb = ra.status==='fulfilled' ? ra.value : null;
+  const [rb, rc, ra, rp] = await Promise.allSettled([getBudget(), getCfo(), getAbbonamenti(), getPatrimonio()]);
+  const bud = rb.status==='fulfilled' ? rb.value : null, cfo = rc.status==='fulfilled' ? rc.value : null, abb = ra.status==='fulfilled' ? ra.value : null, patr = rp.status==='fulfilled' ? rp.value : null;
   const t = oggiApp(), y = t.getFullYear(), m = t.getMonth(), gg = t.getDate(), dim = new Date(y,m+1,0).getDate(), f = gg/dim, fa = (m+f)/12;
 
   // l'anno: situazione iniziale contro oggi
@@ -1220,6 +1221,7 @@ async function vOggi(){
   <div class="cols"><div>
     ${heroAnno}
     ${schedaLiquidita(Yr, base, y)}
+    ${schedaPatrimonio(patr)}
     ${cosaFare}
   </div><div>
     ${dove}
@@ -1341,8 +1343,8 @@ async function vAnalisi(){
   <div class="list">${r('consulente','MessageCircle','Consulente di spesa','')}${r('andamento','ChartColumn','Andamento e categorie','')}${r('anni','History','Negli anni','')}${r('salute','Activity','Salute finanziaria',vS)}${r('uniforma','Combine','Uniforma le voci','')}</div></section>
   <section class="blocco"><h2 class="gh">Spese da seguire</h2>
   <div class="list">${r('casa','House','Casa',vC)}${r('bollette','Zap','Bollette di luce e gas','')}${r('abbonamenti','Repeat','Abbonamenti',vA)}${r('coab','Users','Coabitazione',mese(S.coabM.m).toLowerCase())}</div></section>
-  <section class="blocco"><h2 class="gh">Entrate</h2>
-  <div class="list">${r('buste','Briefcase','Buste paga','')}</div></section>
+  <section class="blocco"><h2 class="gh">Entrate e patrimonio</h2>
+  <div class="list">${r('buste','Briefcase','Buste paga','')}${r('patrimonio','Landmark','Patrimonio','')}</div></section>
   <section class="blocco"><h2 class="gh">Importa</h2>
   <div class="list">${r('estratto','FileUp','Estratto conto','')}${r('scontrini','ReceiptText','Scontrini',SC.some(x=>x.stato==='pronto')?'da rivedere':'')}${r('prezzi','ChartLine','Prezzi e inflazione','')}</div></section>
   <section class="blocco"><h2 class="gh">App</h2>
@@ -1941,6 +1943,105 @@ async function caricaFoto(blob, nomeFile){
   if (!res.ok) throw new Error(await res.text());
   const j = await res.json();
   return j.webUrl || nomeFile;
+}
+
+// ── PATRIMONIO: Moneyfarm letto ogni sera alle 20 da una routine di Claude nel cloud, solo in lettura (nessun ordine né trasferimento).
+// La routine scrive gli ultimi 31 giorni in Patrimonio/moneyfarm-ultimi.json, accanto al file Excel; l'app aggiunge i giorni nuovi
+// a Patrimonio/moneyfarm-storico.json (un valore a settimana fino al 20/11/2026, poi uno al giorno) e lo riscrive
+const PF_NOMI = {patrimoniale:'Gestione patrimoniale', pensione:'Fondo pensione'};
+let _patr = null;
+const percorsoPatr = nome => (cartellaFile() + '/Patrimonio/' + nome).split('/').map(encodeURIComponent).join('/');
+async function leggiPatr(nome){
+  await getToken();
+  const r = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${percorsoPatr(nome)}:/content`, {headers:{Authorization:'Bearer '+accessToken}, cache:'no-store'});
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function scriviPatr(nome, dati){
+  await getToken();
+  const r = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${percorsoPatr(nome)}:/content`, {method:'PUT', headers:{Authorization:'Bearer '+accessToken, 'Content-Type':'application/json'}, body:JSON.stringify(dati)});
+  if (!r.ok) throw new Error(await r.text());
+}
+function getPatrimonio(){
+  return _patr = _patr || (async () => {
+    const [st, ul] = await Promise.all([leggiPatr('moneyfarm-storico.json'), leggiPatr('moneyfarm-ultimi.json').catch(() => null)]);
+    if (!st && !ul) return null;
+    const P = st || {fonte:'Moneyfarm', portafogli:{}};
+    let nuovi = 0;
+    if (ul) for (const [k, giorni] of Object.entries(ul.giorni || {})) {
+      const q = P.portafogli[k] = P.portafogli[k] || {nome: PF_NOMI[k] || k, valori:[], versato:[]};
+      const ultimo = q.valori.length ? q.valori[q.valori.length-1][0] : '';
+      for (const [d, v, ver] of [...giorni].sort((a, b) => String(a[0]).localeCompare(String(b[0])))) {
+        if (!/^\d{4}-\d\d-\d\d$/.test(d) || typeof v !== 'number' || d <= ultimo) continue;
+        q.valori.push([d, v]); nuovi++;
+        if (typeof ver === 'number' && ver !== (q.versato.length ? q.versato[q.versato.length-1][1] : null)) q.versato.push([d, ver]);
+      }
+    }
+    if (nuovi) { P.aggiornato = ul.aggiornato; scriviPatr('moneyfarm-storico.json', P).catch(() => {}); }
+    return {P, oggi: ul && ul.oggi || null, aggiornato: ul && ul.aggiornato || P.aggiornato || ''};
+  })().catch(e => { _patr = null; throw e; });
+}
+// valore e versato di oggi per portafoglio: dalla lettura della sera, altrimenti l'ultimo dello storico
+function contiPatr(X){
+  const ult = L => L.length ? L[L.length-1][1] : 0;
+  return Object.entries(X.P.portafogli).map(([k, q]) => { const o = X.oggi && X.oggi[k] || {};
+    return {k, nome: PF_NOMI[k] || q.nome || k, valore: typeof o.valore === 'number' ? o.valore : ult(q.valori), versato: typeof o.versato === 'number' ? o.versato : ult(q.versato), liquidita: o.liquidita || 0}; });
+}
+// somma dei portafogli giorno per giorno: per ogni data l'ultimo valore noto di ciascuno
+function serieTotalePatr(X, da){
+  const Q = Object.values(X.P.portafogli), at = (L, d) => { let v = 0; for (const x of L) { if (x[0] > d) break; v = x[1]; } return v; };
+  return [...new Set(Q.flatMap(q => q.valori.map(x => x[0])))].filter(d => d >= da).sort()
+    .map(d => ({d, v: Q.reduce((t, q) => t + at(q.valori, d), 0), c: Q.reduce((t, q) => t + at(q.versato, d), 0)}));
+}
+function graficoPatrimonio(pt){
+  if (pt.length < 2) return '';
+  const W = 344, H = 184, L = 52, B = 24, T = 8, w = W - L, h = H - B - T;
+  const g = d => Date.parse(d + 'T12:00:00Z') / 864e5, g0 = g(pt[0].d), g1 = g(pt[pt.length-1].d);
+  const hi = Math.max(...pt.map(p => Math.max(p.v, p.c))), lo = Math.min(...pt.map(p => Math.min(p.v, p.c))), span = Math.max(hi - lo, 1);
+  const step = [100,250,500,1000,2000,2500,5000,10000,20000].find(x => span / x <= 4) || 50000;
+  const y0 = Math.max(0, Math.floor(lo / step) * step), y1 = Math.ceil(hi / step) * step || step;
+  const X = d => L + (g(d) - g0) / (g1 - g0 || 1) * w, Y = v => T + h - (v - y0) / (y1 - y0 || 1) * h;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Valore e versato nel tempo">`;
+  for (let v = y0; v <= y1 + .5; v += step) s += `<line x1="${L}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${L-8}" y="${Y(v)+4}" text-anchor="end">${nf0.format(v)}</text>`;
+  const linea = k => pt.map((p, i) => (i ? 'L' : 'M') + X(p.d).toFixed(1) + ' ' + Y(p[k]).toFixed(1)).join(' ');
+  s += `<path d="${linea('c')}" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  s += `<path d="${linea('v')}" fill="none" stroke="var(--line-2)" stroke-width="1.75" stroke-linejoin="round"/>`;
+  const ul = pt[pt.length-1]; s += `<circle cx="${X(ul.d)}" cy="${Y(ul.v)}" r="3" fill="var(--card)" stroke="var(--line-2)" stroke-width="1.5"/>`;
+  // sotto: gli anni se il periodo è lungo, altrimenti un mese ogni due
+  const lungo = g1 - g0 > 400; let [a, m] = pt[0].d.split('-').map(Number); m++; if (m > 12) { m = 1; a++; }
+  for (let i = 0; i < 80; i++) { const d = `${a}-${String(m).padStart(2,'0')}-01`; if (d > ul.d) break;
+    if (lungo ? m === 1 : m % 2 === 1) s += `<text x="${X(d)}" y="${H-4}" text-anchor="middle">${lungo ? a : mese(m-1).slice(0,3).toLowerCase()}</text>`;
+    if (++m > 12) { m = 1; a++; } }
+  return s + `</svg><div class="key"><span style="--c:var(--line-2)"><i></i>Valore</span><span style="--c:var(--text-3)"><i></i>Versato</span></div>`;
+}
+const segnoEur = n => (n >= 0 ? '+' : '−') + eur0(Math.abs(n));
+async function vPatrimonio(){
+  const X = await getPatrimonio(), titolo = '<h1 class="lt">Patrimonio</h1>';
+  if (!X) return titolo + `<div class="card"><p>Non trovo ancora i dati di Moneyfarm.</p><p class="note" style="margin:8px 0 0">Li scrive ogni sera alle 20 la lettura automatica di Claude, nella cartella Patrimonio accanto al file Excel.</p></div>`;
+  const C = contiPatr(X), tot = C.reduce((t, c) => t + c.valore, 0), ver = C.reduce((t, c) => t + c.versato, 0), gu = tot - ver;
+  const per = S.patrPer || 'anno', fine = serieTotalePatr(X, '').pop();
+  const da = per === 'tutto' || !fine ? '' : (() => { const d = new Date(fine.d + 'T12:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); return d.toISOString().slice(0, 10); })();
+  const pt = serieTotalePatr(X, da), ini = pt[0];
+  const vecchio = X.aggiornato && (Date.now() - Date.parse(X.aggiornato + 'T20:00:00')) / 864e5 > 2;
+  const riga = c => { const g = c.valore - c.versato;
+    return `<div class="row"><span class="ic">${ico(c.k === 'pensione' ? 'Landmark' : 'TrendingUp')}</span><span class="row-main"><span class="row-line"><span class="row-title">${esc(c.nome)}</span><span class="num">${eur0(c.valore)}</span></span><span class="row-sub">Versati ${eur0(c.versato)}, <span class="${g >= 0 ? 'pos' : 'neg'}">${segnoEur(g)}</span>${c.versato ? ` (${g >= 0 ? '+' : '−'}${nf1.format(Math.abs(g / c.versato * 100))}%)` : ''}${c.liquidita ? `. Di cui ${eur0(c.liquidita)} non ancora investiti` : ''}</span></span></div>`; };
+  return titolo + `<section class="card hero" aria-label="Patrimonio in breve">
+    <p class="lead">Hai <b class="num">${eur0(tot)}</b> tra gestione patrimoniale e fondo pensione.</p>
+    <p class="muted" style="margin-top:8px">Hai versato <b class="num">${eur0(ver)}</b>: <b class="num ${gu >= 0 ? 'pos' : 'neg'}">${segnoEur(gu)}</b>${ver ? ` (${gu >= 0 ? '+' : '−'}${nf1.format(Math.abs(gu / ver * 100))}%)` : ''}.</p>
+    <div class="chips" role="group" aria-label="Periodo" style="margin-top:16px">${[['anno','Un anno'],['tutto','Dall\'inizio']].map(([v, l]) => `<button class="chip ${per === v ? 'on' : ''}" aria-pressed="${per === v}" onclick="S.patrPer='${v}';render()">${l}</button>`).join('')}</div>
+    ${graficoPatrimonio(pt)}
+    ${ini && fine ? `<p class="note" style="margin:8px 0 0">${per === 'tutto' ? 'Dal primo versamento' : 'In un anno'} il valore è passato da ${eur0(ini.v)} a ${eur0(fine.v)}; i versamenti da ${eur0(ini.c)} a ${eur0(fine.c)}.</p>` : ''}
+  </section>
+  <h2 class="gh">Portafogli</h2>
+  <div class="list">${C.map(riga).join('')}</div>
+  <p class="note">${vecchio ? `<b class="warn">Ultima lettura il ${giornoBreve(X.aggiornato)}: quella automatica delle 20 non è arrivata.</b> ` : X.aggiornato ? `Letto da Moneyfarm il ${giornoBreve(X.aggiornato)}. ` : ''}Il guadagno è il valore meno il versato, non un rendimento annuo. Solo lettura: dall'app non parte nessun ordine né trasferimento.</p>`;
+}
+// riquadro nel Riepilogo: il totale e il guadagno, tocca per la scheda
+function schedaPatrimonio(X){
+  if (!X) return '';
+  const C = contiPatr(X), tot = C.reduce((t, c) => t + c.valore, 0), gu = tot - C.reduce((t, c) => t + c.versato, 0);
+  return `<h2 class="gh">Patrimonio</h2><div class="list"><button class="row" onclick="go('patrimonio','push')"><span class="ic">${ico('Landmark')}</span><span class="row-main"><span class="row-line"><span class="row-title">Moneyfarm</span><span class="num">${eur0(tot)}</span></span><span class="row-sub">Patrimoniale e fondo pensione, <span class="${gu >= 0 ? 'pos' : 'neg'}">${segnoEur(gu)}</span> sul versato</span></span>${chev()}</button></div>`;
 }
 
 // ── estratto conto: legge, confronta con il file, propone cosa aggiungere o correggere
