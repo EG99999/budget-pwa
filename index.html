@@ -512,7 +512,7 @@ const CATEGORIE = ['ACQUISTI ONLINE','ALTRI REDDITI','AVANZO','CASA','CIBO','CRE
 const CADENZE = ['SECCA','MENSILE','SETTIMANALE','BISETTIMANALE','BIMENSILE','TRIMESTRALE','QUADRIMESTRALE','ANNUALE','PLURIANNUALE','GIORNALIERA'];
 const MEZZI = ['CARTA DI CREDITO','ADDEBITO CONTO','BONIFICO','ACCREDITO CONTO','CARTA DI DEBITO','CONTANTI','ALTRO TRASFERIMENTO'];
 
-const VERSIONE_APP = 33;
+const VERSIONE_APP = 34;
 // registro dell'accesso (senza dati personali): si vede sotto il pulsante quando il ritorno da Microsoft non riesce
 const DIAG = [];
 const msalConfig = {
@@ -1238,10 +1238,13 @@ async function vOggi(){
 }
 
 // ── MOVIMENTI ─────────────────────────────────────────────────
+function setVistaMov(v){ S.movVista = v; render(); }
 async function vMov(){
+  const vista = seg([['elenco','Elenco'],['analisi','Analisi']], S.movVista || 'elenco', 'setVistaMov');
+  if (S.movVista === 'analisi') return `<h1 class="lt">Movimenti</h1>${vista}` + await vAnalisiSpese();
   const rows = await getTransazioni(), f = S.f;
   const cats = [...new Set(rows.map(r=>r.tipologia).filter(Boolean))].sort();
-  return `<h1 class="lt">Movimenti</h1>
+  return `<h1 class="lt">Movimenti</h1>${vista}
   <label class="search">${ico('Search')}<input type="search" placeholder="Cerca descrizione o categoria" value="${esc(f.q)}" oninput="S.f.q=this.value;S.f.limit=300;drawMov()" aria-label="Cerca"></label>
   ${seg([['mese','Mese'],['anno','Anno'],['tutto','Tutto']], f.per, 'setPer')}
   ${f.per==='mese'?monthSw('movM'):f.per==='anno'?monthSw('movM',true):''}
@@ -1254,6 +1257,7 @@ async function vMov(){
 }
 function setPer(p){ S.f.per=p; S.f.limit=300; render(); }
 function drawMov(){
+  if (!$('#movList')) return;
   const rows = cachedRows || [], f = S.f, q = f.q.trim().toLowerCase(), {y,m} = S.movM;
   let L = rows.filter(r => r.data && (f.per==='tutto' || (f.per==='anno' ? String(r.data).startsWith(String(y)) : sameYM(r.data,y,m))));
   if (f.senso) L = L.filter(r=>String(r.senso||'').toUpperCase()===f.senso);
@@ -1944,6 +1948,150 @@ async function caricaFoto(blob, nomeFile){
   const j = await res.json();
   return j.webUrl || nomeFile;
 }
+
+// ── ANALISI DELLE SPESE (Movimenti → Analisi): dove vanno più soldi, cosa si ripete e i pagamenti fissi, nel periodo scelto.
+// Le descrizioni sono scritte a mano: la stessa voce si riconosce anche con date, mesi, refusi e parole in più.
+// Gli investimenti restano fuori: sono spese buone, non spese da guardare
+const AN = {per:'mese', da:'', a:'', tab:'voci', cat:'', tutte:{}};
+const MESI_RE = /\b(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\b/g;
+const PAROLE_VUOTE = new Set('da di del dello della dei degli delle con per il lo la le l i gli e ed a al allo alla ai agli alle in nel nella su sul sulla mese mensile mensili settimanale annuale abbonamento fattura rata spesa addebito pagamento acquisto'.split(' '));
+function chiaveVoce(desc){
+  let t = String(desc || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['’`]/g, '').replace(MESI_RE, ' ').replace(/[^a-z]+/g, ' ').split(' ').filter(Boolean);
+  const c = t.indexOf('con'); if (c > 0) t = t.slice(0, c); // "... con Auri": la compagnia non cambia la voce
+  return [...new Set(t.filter(w => w.length > 1 && !PAROLE_VUOTE.has(w) && !(w.length >= 5 && MESI_INTERI.some(x => distanza(w, x, 1) <= 1))))].sort().join(' ');
+}
+const MESI_INTERI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+// il nome da mostrare: la descrizione più usata, senza date, mesi e segni
+const titoloVoce = d => { const t = String(d || '').replace(/-{2,}[^-]*-{2,}/g, ' ').replace(new RegExp(MESI_RE.source, 'gi'), ' ').replace(/#\d*|\b\d+\b/g, ' ').replace(/[()]/g, ' ').replace(/\s+/g, ' ').replace(/^[\s\-+,.]+|[\s\-+,.]+$/g, '').trim(); return frase(t || d); };
+function distanza(a, b, max){
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let p = Array.from({length: b.length + 1}, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) { const q = [i]; let mn = i;
+    for (let j = 1; j <= b.length; j++) { q[j] = Math.min(p[j] + 1, q[j-1] + 1, p[j-1] + (a[i-1] === b[j-1] ? 0 : 1)); if (q[j] < mn) mn = q[j]; }
+    if (mn > max) return max + 1; p = q; }
+  return p[b.length];
+}
+// stessa voce: stesse parole in ordine diverso, poche lettere di differenza (refusi) o le parole di una contenute nell'altra (almeno due)
+function raggruppaVoci(L){
+  const per = {}; L.forEach(r => { const k = chiaveVoce(r.descrizione) || 'cat:' + (r.tipologia || ''); (per[k] = per[k] || []).push(r); });
+  const K = Object.keys(per), pad = {}; K.forEach(k => pad[k] = k);
+  const radice = k => pad[k] === k ? k : (pad[k] = radice(pad[k]));
+  const idx = {}, visti = new Set();
+  K.forEach(k => { if (!k.startsWith('cat:')) k.split(' ').forEach(w => (idx[w] = idx[w] || []).push(k)); });
+  Object.values(idx).forEach(G => { if (G.length > 300) return;
+    for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++) {
+      const a = G[i], b = G[j], id = a < b ? a + '|' + b : b + '|' + a; if (visti.has(id)) continue; visti.add(id);
+      const ta = a.split(' '), tb = b.split(' '), [pic, gra] = ta.length <= tb.length ? [ta, tb] : [tb, ta], max = Math.min(a.length, b.length) >= 12 ? 2 : 1;
+      if ((pic.length >= 2 && pic.every(w => gra.includes(w))) || (Math.min(a.length, b.length) >= 6 && distanza(a, b, max) <= max)) { const x = radice(a), y = radice(b); if (x !== y) pad[y] = x; }
+    } });
+  const G = {}; K.forEach(k => { const r = radice(k); (G[r] = G[r] || []).push(...per[k]); });
+  return Object.values(G).map(R => { const conta = {}; R.forEach(r => { const d = String(r.descrizione || '').trim(); if (d) conta[d] = (conta[d] || 0) + 1; });
+    const top = Object.entries(conta).sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0];
+    const tot = R.reduce((t, r) => t - r.valore, 0);
+    return {titolo: top ? titoloVoce(top[0]) : nome(R[0].tipologia), R: R.sort((a, b) => String(b.data).localeCompare(String(a.data))), tot, n: R.length, cat: R[0].tipologia}; });
+}
+const giornoN = d => Date.parse(d + 'T12:00:00Z') / 864e5;
+// pagamenti fissi: date a distanza regolare (settimana, mese, anno...) e importi simili, ancora attivi
+function pagamentiFissi(gruppi, oggi){
+  const CAD = [[6, 8, 'ogni settimana', 7], [12, 17, 'ogni due settimane', 14], [25, 35, 'ogni mese', 30.4], [55, 70, 'ogni due mesi', 61], [80, 100, 'ogni tre mesi', 91], [170, 200, 'ogni sei mesi', 182], [340, 390, 'ogni anno', 365]];
+  return gruppi.map(g => {
+    const D = [...new Set(g.R.map(r => r.data))].sort(); if (D.length < 2) return null;
+    const salti = D.slice(1).map((d, i) => giornoN(d) - giornoN(D[i])), ord = [...salti].sort((a, b) => a - b), med = ord[ord.length >> 1];
+    const c = CAD.find(([lo, hi]) => med >= lo && med <= hi); if (!c || D.length < (c[3] >= 170 ? 2 : 3)) return null;
+    // ogni sei mesi o ogni anno con due sole volte può essere un caso: serve che nel file non siano segnate come spese secche
+    if (c[3] >= 170 && g.R.filter(r => /secca/i.test(r.cadenza || '')).length * 2 >= g.R.length) return null;
+    if (salti.filter(x => x >= c[0] * 0.8 && x <= c[1] * 1.2).length / salti.length < 0.6) return null;
+    const imp = g.R.map(r => -r.valore).sort((a, b) => a - b), tip = imp[imp.length >> 1];
+    if (imp.filter(v => Math.abs(v - tip) <= Math.max(tip * 0.25, 2)).length / imp.length < 0.6) return null;
+    const ultimo = D[D.length - 1]; if (giornoN(oggi) - giornoN(ultimo) > c[3] * 2 + 5) return null;
+    return {...g, cad: c[2], tip, anno: tip * 365 / c[3], ultimo, prossimo: isoDi(new Date((giornoN(ultimo) + c[3]) * 864e5))};
+  }).filter(Boolean).sort((a, b) => b.anno - a.anno);
+}
+const isoMese = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`;
+async function righeDalAl(da, a){
+  const ys = []; for (let y = +da.slice(0, 4); y <= +a.slice(0, 4); y++) ys.push(y);
+  const parti = await Promise.all(ys.map(y => righeAnno(y).catch(() => null)));
+  return parti.flatMap((p, i) => p ? p.righe.map(r => Object.assign({}, r, {_anno: ys[i]})) : [])
+    .filter(r => r.data && r.data >= da && r.data <= a && spesa(r) && !investimento(r));
+}
+function periodoAnalisi(){
+  const t = oggiApp(), oggi = isoDi(t), {y, m} = S.movM;
+  if (AN.per === 'mese') return {da: isoMese(y, m) + '-01', a: isoDi(new Date(y, m + 1, 0)), nome: `${mese(m)} ${y}`};
+  if (AN.per === 'anno') return {da: `${y}-01-01`, a: `${y}-12-31`, nome: String(y)};
+  if (/^\d+$/.test(AN.per)) { const d = new Date(t); d.setMonth(d.getMonth() - +AN.per); d.setDate(d.getDate() + 1); return {da: isoDi(d), a: oggi, nome: `ultimi ${AN.per} mesi`}; }
+  if (AN.per === 'date') { let da = AN.da || oggi.slice(0, 4) + '-01-01', a = AN.a || oggi; if (da > a) [da, a] = [a, da]; return {da, a, nome: `dal ${giornoBreve(da)} ${da.slice(0, 4)} al ${giornoBreve(a)} ${a.slice(0, 4)}`}; }
+  return {da: '', a: oggi, nome: 'tutti gli anni'};
+}
+// barre: per giorno se il periodo sta in un mese e mezzo, altrimenti per mese
+function barreSpese(L, da, a, etichetta){
+  const corto = giornoN(a) - giornoN(da) <= 45, K = [], V = {};
+  if (corto) for (let g = giornoN(da); g <= giornoN(a); g++) K.push(isoDi(new Date(g * 864e5)));
+  else { let [y, m] = da.split('-').map(Number); m--; const fine = a.slice(0, 7); while (isoMese(y, m) <= fine && K.length < 400) { K.push(isoMese(y, m)); if (++m > 11) { m = 0; y++; } } }
+  L.forEach(r => { const k = corto ? r.data : r.data.slice(0, 7); V[k] = (V[k] || 0) - r.valore; });
+  const W = 344, H = 168, Lm = 44, B = 22, T = 8, w = W - Lm, h = H - B - T, mx = Math.max(1, ...K.map(k => V[k] || 0));
+  const step = [10,20,25,50,100,200,250,500,1000,2000,2500,5000,10000].find(x => mx / x <= 4) || 20000, top = Math.ceil(mx / step) * step;
+  const bw = w / K.length, Y = v => T + h - v / top * h;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(etichetta)}">`;
+  for (let v = 0; v <= top + .5; v += step) s += `<line x1="${Lm}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${Lm-8}" y="${Y(v)+4}" text-anchor="end">${nf0.format(v)}</text>`;
+  const ogni = corto ? 7 : K.length > 36 ? 12 : K.length > 13 ? 3 : 1;
+  K.forEach((k, i) => { const v = V[k] || 0, x = Lm + i * bw;
+    if (v) s += `<rect x="${(x + bw * .15).toFixed(1)}" y="${Y(v).toFixed(1)}" width="${Math.max(bw * .7, 1).toFixed(1)}" height="${(h + T - Y(v)).toFixed(1)}" rx="${Math.min(3, bw * .3).toFixed(1)}" fill="var(--line-1)"><title>${corto ? giornoBreve(k) : mese(+k.slice(5) - 1) + ' ' + k.slice(0, 4)}: ${fmt(v)}</title></rect>`;
+    const lab = corto ? (i % ogni === 0 ? String(+k.slice(8)) : '') : ogni === 12 ? (k.endsWith('-01') || i === 0 ? k.slice(0, 4) : '') : i % ogni === 0 ? mese(+k.slice(5) - 1).slice(0, 3).toLowerCase() : '';
+    if (lab) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle">${lab}</text>`; });
+  return s + '</svg>';
+}
+let _an = null;
+async function vAnalisiSpese(){
+  const P = periodoAnalisi();
+  if (AN.per === 'tutto') { const anni = Object.keys(await anniDisponibili().catch(() => ({}))).map(Number).filter(Boolean); P.da = `${anni.length ? Math.min(...anni) : annoFile()}-01-01`; }
+  const oggi = isoDi(oggiApp()), da24 = isoDi(new Date((giornoN(oggi) - 730) * 864e5));
+  const [tutte, ult] = await Promise.all([righeDalAl(P.da, P.a), righeDalAl(da24, oggi)]);
+  const L = AN.cat ? tutte.filter(r => r.tipologia === AN.cat) : tutte;
+  const cats = [...new Set(tutte.map(r => r.tipologia).filter(Boolean))].sort();
+  const G = raggruppaVoci(L), F = pagamentiFissi(raggruppaVoci(AN.cat ? ult.filter(r => r.tipologia === AN.cat) : ult), oggi);
+  const tot = L.reduce((t, r) => t - r.valore, 0), mesi = Math.max(1, (giornoN(P.a < oggi ? P.a : oggi) - giornoN(P.da) + 1) / 30.44);
+  _an = {G, F, L};
+  const chip = (v, l) => `<button class="chip ${AN.per === v ? 'on' : ''}" aria-pressed="${AN.per === v}" onclick="AN.per='${v}';AN.tutte={};render()">${l}</button>`;
+  const piu = (k, n) => n > 10 ? `<button class="btn soft" style="margin-top:8px" onclick="AN.tutte.${k}=!AN.tutte.${k};render()">${AN.tutte[k] ? 'Mostra meno' : `Mostra tutte (${n})`}</button>` : '';
+  const barra = (i, tit, sub, v, mx, click) => `<button class="hbar" onclick="${click}"><span>${esc(tit)}${sub ? `<span class="muted" style="font-size:13px"> ${sub}</span>` : ''}</span><span class="num muted">${fmt(v)}</span><span class="bar"><i style="width:${Math.max(2, v / mx * 100)}%"></i></span></button>`;
+  let lista = '';
+  if (AN.tab === 'voci') { const V = [...G].sort((a, b) => b.tot - a.tot), mx = V.length ? V[0].tot : 1;
+    lista = V.slice(0, AN.tutte.voci ? 999 : 10).map(g => barra(0, g.titolo, `${g.n} ${g.n === 1 ? 'volta' : 'volte'}`, g.tot, mx, `apriVoceAn(${G.indexOf(g)})`)).join('') + '</div>' + piu('voci', V.length); }
+  else if (AN.tab === 'categorie') { const C = Object.entries(perCat(L)).map(([c, v]) => [c, -v]).sort((a, b) => b[1] - a[1]), mx = C.length ? C[0][1] : 1;
+    lista = C.slice(0, AN.tutte.categorie ? 999 : 10).map(([c, v]) => barra(0, nome(c), pct(v / (tot || 1)), v, mx, `apriCatAn(${esc(JSON.stringify(c))})`)).join('') + '</div>' + piu('categorie', C.length); }
+  else { const S1 = [...L].sort((a, b) => a.valore - b.valore), mx = S1.length ? -S1[0].valore : 1;
+    lista = S1.slice(0, AN.tutte.singole ? 999 : 10).map(r => barra(0, frase(r.descrizione) || nome(r.tipologia), `${giornoBreve(r.data)} ${r.data.slice(0, 4)}`, -r.valore, mx, r._anno === annoFile() ? `openTx(${r._index})` : `toast('Movimento del ${r._anno}: aprilo scegliendo quell\\'anno')`)).join('') + '</div>' + piu('singole', S1.length); }
+  const freq = [...G].filter(g => g.n > 1).sort((a, b) => b.n - a.n || b.tot - a.tot).slice(0, 8);
+  return `<div class="chips" role="group" aria-label="Periodo">${chip('mese', 'Mese')}${chip('anno', 'Anno')}${chip('3', '3 mesi')}${chip('6', '6 mesi')}${chip('12', '12 mesi')}${chip('tutto', 'Tutto')}${chip('date', 'Dal… al…')}</div>
+  ${AN.per === 'mese' ? monthSw('movM') : AN.per === 'anno' ? monthSw('movM', true) : ''}
+  ${AN.per === 'date' ? `<div class="list" style="margin-bottom:16px"><label class="row"><span>Dal</span><input class="field" type="date" value="${P.da}" onchange="AN.da=this.value;render()"></label><label class="row"><span>Al</span><input class="field" type="date" value="${P.a}" onchange="AN.a=this.value;render()"></label></div>` : ''}
+  <div class="chips"><select class="chip ${AN.cat ? 'on' : ''}" onchange="AN.cat=this.value;AN.tutte={};render()" aria-label="Categoria"><option value="">Tutte le categorie</option>${cats.map(c => `<option value="${esc(c)}" ${AN.cat === c ? 'selected' : ''}>${esc(nome(c))}</option>`).join('')}</select></div>
+  <div class="sum2"><div><small>Spese, ${esc(P.nome)}</small><b>${fmt(tot)}</b></div><div><small>${mesi >= 1.5 ? 'In media al mese' : 'Movimenti'}</small><b>${mesi >= 1.5 ? fmt(tot / mesi) : L.length}</b></div></div>
+  ${L.length ? `<div class="card" style="margin:8px 0 16px">${barreSpese(L, P.da, P.a, 'Spese nel periodo')}</div>` : '<div class="list"><p class="empty">Nessuna spesa in questo periodo.</p></div>'}
+  ${L.length ? `<h2 class="gh">Dove vanno più soldi</h2>
+  ${seg([['voci', 'Voci'], ['categorie', 'Categorie'], ['singole', 'Singole spese']], AN.tab, 'setTabAn')}
+  <div class="list">${lista}
+  ${freq.length ? `<h2 class="gh">Le più frequenti</h2><div class="list">${freq.map(g => `<button class="row" onclick="apriVoceAn(${G.indexOf(g)})"><span class="row-main"><span class="row-line"><span class="row-title">${esc(g.titolo)}</span><span class="num">${g.n} volte</span></span><span class="row-sub">${fmt(g.tot)} in tutto, in media ${fmt(g.tot / g.n)} ogni volta</span></span>${chev()}</button>`).join('')}</div>` : ''}` : ''}
+  <h2 class="gh">Pagamenti fissi</h2>
+  ${F.length ? `<div class="list">${F.map(g => `<button class="row" onclick="apriFissoAn(${F.indexOf(g)})"><span class="row-main"><span class="row-line"><span class="row-title">${esc(g.titolo)}</span><span class="num">${fmt(g.anno)} l'anno</span></span><span class="row-sub">${frase(g.cad)}, circa ${fmt(g.tip)}. Ultimo il ${giornoBreve(g.ultimo)}, prossimo verso il ${giornoBreve(g.prossimo)}</span></span>${chev()}</button>`).join('')}</div>
+  <p class="note">Riconosciuti dagli ultimi due anni: stessa voce a distanza regolare e importo simile, ancora attiva. In tutto circa ${fmt(F.reduce((t, g) => t + g.anno, 0))} l'anno.</p>` : '<div class="list"><p class="empty">Nessun pagamento fisso riconosciuto negli ultimi due anni.</p></div>'}
+  <p class="note">Gli investimenti non sono contati: sono spese buone. Le voci uguali scritte in modo diverso sono unite da sole; per correggerle nel file c'è Uniforma.</p>`;
+}
+function setTabAn(v){ AN.tab = v; render(); }
+function schedaAn(tit, R, extra){
+  const tot = R.reduce((t, r) => t - r.valore, 0), D = R.map(r => r.data).sort();
+  openSheet(`<div class="grab"></div><div class="sheet-head"><button class="link" onclick="closeSheet()">Chiudi</button><h2>${esc(tit)}</h2><span></span></div>
+  <div class="sheet-scroll">
+    <div class="stat3" style="margin-top:8px"><div><small>In tutto</small><b>${fmt(tot)}</b></div><div><small>Volte</small><b>${R.length}</b></div><div><small>In media</small><b>${fmt(tot / (R.length || 1))}</b></div></div>
+    ${extra || ''}
+    ${R.length > 1 ? `<div class="card" style="margin-bottom:16px">${barreSpese(R, D[0], D[D.length - 1], tit)}</div>` : ''}
+    <p class="sublabel">Movimenti</p>
+    <div class="list">${R.map(r => r._anno === annoFile() ? txRow(r, true) : `<div class="row"><span class="row-main"><span class="row-title">${esc(frase(r.descrizione) || nome(r.tipologia))}</span><span class="row-sub">${esc(nome(r.tipologia))}, ${giornoBreve(r.data)} ${r.data.slice(0, 4)}</span></span><span class="num">${fmt(-r.valore)}</span></div>`).join('')}</div>
+  </div>`);
+}
+function apriVoceAn(i){ const g = _an && _an.G[i]; if (g) schedaAn(g.titolo, g.R); }
+function apriCatAn(c){ if (_an) schedaAn(nome(c), _an.L.filter(r => r.tipologia === c).sort((a, b) => String(b.data).localeCompare(String(a.data)))); }
+function apriFissoAn(i){ const g = _an && _an.F[i]; if (g) schedaAn(g.titolo, g.R, `<p class="note" style="margin:0 8px 16px">${frase(g.cad)}, circa ${fmt(g.tip)}: ${fmt(g.anno)} l'anno. Prossimo verso il ${giornoBreve(g.prossimo)}.</p>`); }
 
 // ── PATRIMONIO: Moneyfarm letto ogni sera alle 20 da una routine di Claude nel cloud, solo in lettura (nessun ordine né trasferimento).
 // La routine scrive gli ultimi 31 giorni in Patrimonio/moneyfarm-ultimi.json, accanto al file Excel; l'app aggiunge i giorni nuovi
